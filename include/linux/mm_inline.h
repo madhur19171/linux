@@ -100,6 +100,24 @@ static __always_inline enum lru_list folio_lru_list(struct folio *folio)
 	return lru;
 }
 
+static __always_inline enum lru_list folio_lru_list_opposite(struct folio *folio)
+{
+	enum lru_list lru;
+
+	VM_BUG_ON_FOLIO(folio_test_active(folio) && folio_test_unevictable(folio), folio);
+
+	if (folio_test_unevictable(folio))
+		return LRU_UNEVICTABLE;
+
+	lru = folio_is_file_lru(folio) ? LRU_ACTIVE_FILE : LRU_ACTIVE_ANON;
+	if (folio_test_active(folio))
+		lru -= LRU_ACTIVE;
+
+	return lru;
+}
+
+
+
 #ifdef CONFIG_LRU_GEN
 
 #ifdef CONFIG_LRU_GEN_ENABLED
@@ -328,6 +346,22 @@ void lruvec_add_folio(struct lruvec *lruvec, struct folio *folio)
 	if (lru != LRU_UNEVICTABLE)
 		list_add(&folio->lru, &lruvec->lists[lru]);
 }
+
+static __always_inline
+void lruvec_add_folio_opposite(struct lruvec *lruvec, struct folio *folio)
+{
+	enum lru_list lru = folio_lru_list_opposite(folio);
+
+	if (lru_gen_add_folio(lruvec, folio, false))
+		return;
+
+	update_lru_size(lruvec, lru, folio_zonenum(folio),
+			folio_nr_pages(folio));		// TODO: [MADHUR] This might also need to be changed
+	if (lru != LRU_UNEVICTABLE)
+		list_add(&folio->lru, &lruvec->lists[lru]);
+}
+
+
 
 static __always_inline
 void lruvec_add_folio_tail(struct lruvec *lruvec, struct folio *folio)
