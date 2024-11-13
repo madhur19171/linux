@@ -768,6 +768,42 @@ out:
 }
 
 /**
+ * mem_cgroup_pagepatrol_vec - get the pagepatrol list vector for a memcg & node
+ * @memcg: memcg of the wanted pagepatrol_vec
+ * @pgdat: pglist_data
+ *
+ * Returns the pagepatrol list vector holding pages for a given @memcg &
+ * @pgdat combination. This can be the node pagepatrol_vec, if the memory
+ * controller is disabled.
+ */
+static inline struct pagepatrol_vec *mem_cgroup_pagepatrol_vec(struct mem_cgroup *memcg,
+					       struct pglist_data *pgdat)
+{
+	struct mem_cgroup_per_node *mz;
+	struct pagepatrol_vec *pagepatrol_vec;
+
+	if (mem_cgroup_disabled()) {
+		pagepatrol_vec = &pgdat->__pagepatrol_vec;
+		goto out;
+	}
+
+	if (!memcg)
+		memcg = root_mem_cgroup;
+
+	mz = memcg->nodeinfo[pgdat->node_id];
+	pagepatrol_vec = &mz->pagepatrol_vec;
+out:
+	/*
+	 * Since a node can be onlined after the mem_cgroup was created,
+	 * we have to be prepared to initialize pagepatrol_vec->pgdat here;
+	 * and if offlined then reonlined, we need to reinitialize it.
+	 */
+	if (unlikely(pagepatrol_vec->pgdat != pgdat))
+		pagepatrol_vec->pgdat = pgdat;
+	return pagepatrol_vec;
+}
+
+/**
  * folio_lruvec - return lruvec for isolating/putting an LRU folio
  * @folio: Pointer to the folio.
  *
