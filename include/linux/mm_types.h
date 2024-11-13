@@ -397,6 +397,8 @@ struct folio {
 		};
 		struct page __page_2;
 	};
+
+	struct list_head pagepatrol;
 };
 
 #define FOLIO_MATCH(pg, fl)						\

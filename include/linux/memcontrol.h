@@ -10,6 +10,7 @@
 
 #ifndef _LINUX_MEMCONTROL_H
 #define _LINUX_MEMCONTROL_H
+#include "linux/mmzone.h"
 #include <linux/cgroup.h>
 #include <linux/vm_event_item.h>
 #include <linux/hardirq.h>
@@ -110,6 +111,7 @@ struct mem_cgroup_per_node {
 
 	/* Fields which get updated often at the end. */
 	struct lruvec		lruvec;
+	struct pagepatrol_vec		pagepatrol_vec;
 	CACHELINE_PADDING(_pad2_);
 	unsigned long		lru_zone_size[MAX_NR_ZONES][NR_LRU_LISTS];
 	struct mem_cgroup_reclaim_iter	iter;

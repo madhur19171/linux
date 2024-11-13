@@ -273,6 +273,8 @@ static __always_inline bool vmstat_item_in_bytes(int idx)
 #define LRU_ACTIVE 1
 #define LRU_FILE 2
 
+#define PP_BASE 0
+
 enum lru_list {
 	LRU_INACTIVE_ANON = LRU_BASE,
 	LRU_ACTIVE_ANON = LRU_BASE + LRU_ACTIVE,
@@ -280,6 +282,14 @@ enum lru_list {
 	LRU_ACTIVE_FILE = LRU_BASE + LRU_FILE + LRU_ACTIVE,
 	LRU_UNEVICTABLE,
 	NR_LRU_LISTS
+};
+
+// These will only be used for File Flios so no need to distinguish between File and Anon
+enum pp_list {
+	PP_ACTIVE		=	PP_BASE,
+	PP_INACTIVE,
+	PP_UNEVICTABLE,
+	NR_PP_LISTS
 };
 
 enum vmscan_throttle_state {
@@ -651,6 +661,32 @@ enum zone_watermarks {
 	WMARK_PROMO,
 	NR_WMARK
 };
+
+
+struct pagepatrol_vec {
+	struct list_head		lists[NR_PP_LISTS];
+	/* per ppvec pp_lock for memcg */
+	spinlock_t			pagepatrol_lock;
+	/*
+	 * These track the cost of reclaiming one pp - file
+	 * over the other. As the observed cost of reclaiming one pp
+	 * increases, the reclaim scan balance tips toward the other.
+	 */
+	unsigned long			anon_cost;
+	unsigned long			file_cost;
+	/* Non-resident age, driven by LRU movement */
+	atomic_long_t			nonresident_age;
+	/* Refaults at the time of last reclaim cycle */
+	unsigned long			refaults[ANON_AND_FILE];
+	/* Various ppvec state flags (enum ppvec_flags) */
+	unsigned long			flags;
+
+#ifdef CONFIG_MEMCG
+	struct pglist_data *pgdat;
+#endif
+	struct zswap_lruvec_state zswap_lruvec_state;
+};
+
 
 /*
  * One per migratetype for each PAGE_ALLOC_COSTLY_ORDER. Two additional lists
@@ -1413,6 +1449,8 @@ typedef struct pglist_data {
 	 * Use mem_cgroup_lruvec() to look up lruvecs.
 	 */
 	struct lruvec		__lruvec;
+
+	struct pagepatrol_vec		__pagepatrol_vec;
 
 	unsigned long		flags;
 
