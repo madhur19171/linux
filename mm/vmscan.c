@@ -10,6 +10,7 @@
  *  Multiqueue VM started 5.8.00, Rik van Riel.
  */
 
+#include "linux/mmzone.h"
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include <linux/mm.h>
@@ -5879,6 +5880,7 @@ static void shrink_node_memcgs(pg_data_t *pgdat, struct scan_control *sc)
 	memcg = mem_cgroup_iter(target_memcg, NULL, partial);
 	do {
 		struct lruvec *lruvec = mem_cgroup_lruvec(memcg, pgdat);
+		struct pagepatrol_vec *pagepatrol_vec = mem_cgroup_pagepatrol_vec(memcg, pgdat);
 		unsigned long reclaimed;
 		unsigned long scanned;
 
@@ -5938,6 +5940,7 @@ static void shrink_node(pg_data_t *pgdat, struct scan_control *sc)
 {
 	unsigned long nr_reclaimed, nr_scanned, nr_node_reclaimed;
 	struct lruvec *target_lruvec;
+	struct pagepatrol_vec *target_pagepatrol_vec;
 	bool reclaimable = false;
 
 	if (lru_gen_enabled() && root_reclaim(sc)) {
@@ -5946,6 +5949,7 @@ static void shrink_node(pg_data_t *pgdat, struct scan_control *sc)
 	}
 
 	target_lruvec = mem_cgroup_lruvec(sc->target_mem_cgroup, pgdat);
+	target_pagepatrol_vec = mem_cgroup_pagepatrol_vec(sc->target_mem_cgroup, pgdat);
 
 again:
 	memset(&sc->nr, 0, sizeof(sc->nr));
@@ -5953,7 +5957,7 @@ again:
 	nr_reclaimed = sc->nr_reclaimed;
 	nr_scanned = sc->nr_scanned;
 
-	prepare_scan_control(pgdat, sc);
+	prepare_scan_control(pgdat, sc);	// Scan control will be populated based on LRU policy. Don't know what the consequences will be for Page Patrol
 
 	shrink_node_memcgs(pgdat, sc);
 
