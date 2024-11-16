@@ -2,6 +2,8 @@
 #ifndef LINUX_MM_INLINE_H
 #define LINUX_MM_INLINE_H
 
+#include "mmzone.h"
+#include "pagepatrol.h"
 #include <linux/atomic.h>
 #include <linux/huge_mm.h>
 #include <linux/mm_types.h>
@@ -36,8 +38,8 @@ static inline int page_is_file_lru(struct page *page)
 }
 
 static __always_inline void __update_lru_size(struct lruvec *lruvec,
-				enum lru_list lru, enum zone_type zid,
-				long nr_pages)
+					      enum lru_list lru,
+					      enum zone_type zid, long nr_pages)
 {
 	struct pglist_data *pgdat = lruvec_pgdat(lruvec);
 
@@ -45,13 +47,13 @@ static __always_inline void __update_lru_size(struct lruvec *lruvec,
 	WARN_ON_ONCE(nr_pages != (int)nr_pages);
 
 	__mod_lruvec_state(lruvec, NR_LRU_BASE + lru, nr_pages);
-	__mod_zone_page_state(&pgdat->node_zones[zid],
-				NR_ZONE_LRU_BASE + lru, nr_pages);
+	__mod_zone_page_state(&pgdat->node_zones[zid], NR_ZONE_LRU_BASE + lru,
+			      nr_pages);
 }
 
 static __always_inline void update_lru_size(struct lruvec *lruvec,
-				enum lru_list lru, enum zone_type zid,
-				long nr_pages)
+					    enum lru_list lru,
+					    enum zone_type zid, long nr_pages)
 {
 	__update_lru_size(lruvec, lru, zid, nr_pages);
 #ifdef CONFIG_MEMCG
@@ -88,7 +90,9 @@ static __always_inline enum lru_list folio_lru_list(struct folio *folio)
 {
 	enum lru_list lru;
 
-	VM_BUG_ON_FOLIO(folio_test_active(folio) && folio_test_unevictable(folio), folio);
+	VM_BUG_ON_FOLIO(folio_test_active(folio) &&
+				folio_test_unevictable(folio),
+			folio);
 
 	if (folio_test_unevictable(folio))
 		return LRU_UNEVICTABLE;
@@ -169,11 +173,13 @@ static inline bool lru_gen_is_active(struct lruvec *lruvec, int gen)
 	VM_WARN_ON_ONCE(gen >= MAX_NR_GENS);
 
 	/* see the comment on MIN_NR_GENS */
-	return gen == lru_gen_from_seq(max_seq) || gen == lru_gen_from_seq(max_seq - 1);
+	return gen == lru_gen_from_seq(max_seq) ||
+	       gen == lru_gen_from_seq(max_seq - 1);
 }
 
-static inline void lru_gen_update_size(struct lruvec *lruvec, struct folio *folio,
-				       int old_gen, int new_gen)
+static inline void lru_gen_update_size(struct lruvec *lruvec,
+				       struct folio *folio, int old_gen,
+				       int new_gen)
 {
 	int type = folio_is_file_lru(folio);
 	int zone = folio_zonenum(folio);
@@ -209,16 +215,19 @@ static inline void lru_gen_update_size(struct lruvec *lruvec, struct folio *foli
 	}
 
 	/* promotion */
-	if (!lru_gen_is_active(lruvec, old_gen) && lru_gen_is_active(lruvec, new_gen)) {
+	if (!lru_gen_is_active(lruvec, old_gen) &&
+	    lru_gen_is_active(lruvec, new_gen)) {
 		__update_lru_size(lruvec, lru, zone, -delta);
 		__update_lru_size(lruvec, lru + LRU_ACTIVE, zone, delta);
 	}
 
 	/* demotion requires isolation, e.g., lru_deactivate_fn() */
-	VM_WARN_ON_ONCE(lru_gen_is_active(lruvec, old_gen) && !lru_gen_is_active(lruvec, new_gen));
+	VM_WARN_ON_ONCE(lru_gen_is_active(lruvec, old_gen) &&
+			!lru_gen_is_active(lruvec, new_gen));
 }
 
-static inline bool lru_gen_add_folio(struct lruvec *lruvec, struct folio *folio, bool reclaiming)
+static inline bool lru_gen_add_folio(struct lruvec *lruvec, struct folio *folio,
+				     bool reclaiming)
 {
 	unsigned long seq;
 	unsigned long flags;
@@ -249,7 +258,8 @@ static inline bool lru_gen_add_folio(struct lruvec *lruvec, struct folio *folio,
 		 (folio_test_reclaim(folio) &&
 		  (folio_test_dirty(folio) || folio_test_writeback(folio))))
 		seq = lrugen->max_seq - 1;
-	else if (reclaiming || lrugen->min_seq[type] + MIN_NR_GENS >= lrugen->max_seq)
+	else if (reclaiming ||
+		 lrugen->min_seq[type] + MIN_NR_GENS >= lrugen->max_seq)
 		seq = lrugen->min_seq[type];
 	else
 		seq = lrugen->min_seq[type] + 1;
@@ -269,7 +279,8 @@ static inline bool lru_gen_add_folio(struct lruvec *lruvec, struct folio *folio,
 	return true;
 }
 
-static inline bool lru_gen_del_folio(struct lruvec *lruvec, struct folio *folio, bool reclaiming)
+static inline bool lru_gen_del_folio(struct lruvec *lruvec, struct folio *folio,
+				     bool reclaiming)
 {
 	unsigned long flags;
 	int gen = folio_lru_gen(folio);
@@ -281,7 +292,8 @@ static inline bool lru_gen_del_folio(struct lruvec *lruvec, struct folio *folio,
 	VM_WARN_ON_ONCE_FOLIO(folio_test_unevictable(folio), folio);
 
 	/* for folio_migrate_flags() */
-	flags = !reclaiming && lru_gen_is_active(lruvec, gen) ? BIT(PG_active) : 0;
+	flags = !reclaiming && lru_gen_is_active(lruvec, gen) ? BIT(PG_active) :
+								0;
 	flags = set_mask_bits(&folio->flags, LRU_GEN_MASK, flags);
 	gen = ((flags & LRU_GEN_MASK) >> LRU_GEN_PGOFF) - 1;
 
@@ -303,36 +315,54 @@ static inline bool lru_gen_in_fault(void)
 	return false;
 }
 
-static inline bool lru_gen_add_folio(struct lruvec *lruvec, struct folio *folio, bool reclaiming)
+static inline bool lru_gen_add_folio(struct lruvec *lruvec, struct folio *folio,
+				     bool reclaiming)
 {
 	return false;
 }
 
-static inline bool lru_gen_del_folio(struct lruvec *lruvec, struct folio *folio, bool reclaiming)
+static inline bool lru_gen_del_folio(struct lruvec *lruvec, struct folio *folio,
+				     bool reclaiming)
 {
 	return false;
 }
 
 #endif /* CONFIG_LRU_GEN */
 
-static __always_inline
-void lruvec_add_folio(struct lruvec *lruvec, struct folio *folio)
+static __always_inline void lruvec_add_folio(struct lruvec *lruvec,
+					     struct folio *folio)
 {
 	enum lru_list lru = folio_lru_list(folio);
+	// if (pagepatrol_is_single_list()) {
+	// 	if (lru == LRU_INACTIVE_FILE)
+	// 		lru = LRU_ACTIVE_FILE;
+	// 	if (lru == LRU_INACTIVE_ANON)
+	// 		lru = LRU_ACTIVE_ANON;
+	// }
 
 	if (lru_gen_add_folio(lruvec, folio, false))
 		return;
 
 	update_lru_size(lruvec, lru, folio_zonenum(folio),
 			folio_nr_pages(folio));
-	if (lru != LRU_UNEVICTABLE)
+	if (lru != LRU_UNEVICTABLE) {
 		list_add(&folio->lru, &lruvec->lists[lru]);
+		/* PagePatrol: add to the end */
+		list_add(&folio->pagepatrol_lru,
+			 &lruvec->lists[LRU_PAGEPATROL]);
+	}
 }
 
-static __always_inline
-void lruvec_add_folio_tail(struct lruvec *lruvec, struct folio *folio)
+static __always_inline void lruvec_add_folio_tail(struct lruvec *lruvec,
+						  struct folio *folio)
 {
 	enum lru_list lru = folio_lru_list(folio);
+	// if (pagepatrol_is_single_list()) {
+	// 	if (lru == LRU_INACTIVE_FILE)
+	// 		lru = LRU_ACTIVE_FILE;
+	// 	if (lru == LRU_INACTIVE_ANON)
+	// 		lru = LRU_ACTIVE_ANON;
+	// }
 
 	if (lru_gen_add_folio(lruvec, folio, true))
 		return;
@@ -341,18 +371,25 @@ void lruvec_add_folio_tail(struct lruvec *lruvec, struct folio *folio)
 			folio_nr_pages(folio));
 	/* This is not expected to be used on LRU_UNEVICTABLE */
 	list_add_tail(&folio->lru, &lruvec->lists[lru]);
+	/* PagePatrol */
+	list_add_tail(&folio->pagepatrol_lru, &lruvec->lists[LRU_PAGEPATROL]);
 }
 
-static __always_inline
-void lruvec_del_folio(struct lruvec *lruvec, struct folio *folio)
+static __always_inline void lruvec_del_folio(struct lruvec *lruvec,
+					     struct folio *folio)
 {
 	enum lru_list lru = folio_lru_list(folio);
 
 	if (lru_gen_del_folio(lruvec, folio, false))
 		return;
 
-	if (lru != LRU_UNEVICTABLE)
+	if (lru != LRU_UNEVICTABLE) {
 		list_del(&folio->lru);
+		if (folio_is_file_lru(folio)) {
+			/* PagePatrol */
+			list_del(&folio->pagepatrol_lru);
+		}
+	}
 	update_lru_size(lruvec, lru, folio_zonenum(folio),
 			-folio_nr_pages(folio));
 }
@@ -371,14 +408,13 @@ static inline void anon_vma_name_put(struct anon_vma_name *anon_name)
 		kref_put(&anon_name->kref, anon_vma_name_free);
 }
 
-static inline
-struct anon_vma_name *anon_vma_name_reuse(struct anon_vma_name *anon_name)
+static inline struct anon_vma_name *
+anon_vma_name_reuse(struct anon_vma_name *anon_name)
 {
 	/* Prevent anon_name refcount saturation early on */
 	if (kref_read(&anon_name->kref) < REFCOUNT_MAX) {
 		anon_vma_name_get(anon_name);
 		return anon_name;
-
 	}
 	return anon_vma_name_alloc(anon_name->name);
 }
@@ -408,15 +444,23 @@ static inline bool anon_vma_name_eq(struct anon_vma_name *anon_name1,
 		return true;
 
 	return anon_name1 && anon_name2 &&
-		!strcmp(anon_name1->name, anon_name2->name);
+	       !strcmp(anon_name1->name, anon_name2->name);
 }
 
 #else /* CONFIG_ANON_VMA_NAME */
-static inline void anon_vma_name_get(struct anon_vma_name *anon_name) {}
-static inline void anon_vma_name_put(struct anon_vma_name *anon_name) {}
+static inline void anon_vma_name_get(struct anon_vma_name *anon_name)
+{
+}
+static inline void anon_vma_name_put(struct anon_vma_name *anon_name)
+{
+}
 static inline void dup_anon_vma_name(struct vm_area_struct *orig_vma,
-				     struct vm_area_struct *new_vma) {}
-static inline void free_anon_vma_name(struct vm_area_struct *vma) {}
+				     struct vm_area_struct *new_vma)
+{
+}
+static inline void free_anon_vma_name(struct vm_area_struct *vma)
+{
+}
 
 static inline bool anon_vma_name_eq(struct anon_vma_name *anon_name1,
 				    struct anon_vma_name *anon_name2)
@@ -424,7 +468,7 @@ static inline bool anon_vma_name_eq(struct anon_vma_name *anon_name1,
 	return true;
 }
 
-#endif  /* CONFIG_ANON_VMA_NAME */
+#endif /* CONFIG_ANON_VMA_NAME */
 
 static inline void init_tlb_flush_pending(struct mm_struct *mm)
 {
@@ -516,8 +560,8 @@ static inline bool mm_tlb_flush_nested(struct mm_struct *mm)
  * If no marker should be copied, returns 0.
  * The caller should insert a new pte created with make_pte_marker().
  */
-static inline pte_marker copy_pte_marker(
-		swp_entry_t entry, struct vm_area_struct *dst_vma)
+static inline pte_marker copy_pte_marker(swp_entry_t entry,
+					 struct vm_area_struct *dst_vma)
 {
 	pte_marker srcm = pte_marker_get(entry);
 	/* Always copy error entries. */
@@ -543,9 +587,9 @@ static inline pte_marker copy_pte_marker(
  *
  * This function is a no-op if PTE_MARKER_UFFD_WP is not enabled.
  */
-static inline void
-pte_install_uffd_wp_if_needed(struct vm_area_struct *vma, unsigned long addr,
-			      pte_t *pte, pte_t pteval)
+static inline void pte_install_uffd_wp_if_needed(struct vm_area_struct *vma,
+						 unsigned long addr, pte_t *pte,
+						 pte_t pteval)
 {
 #ifdef CONFIG_PTE_MARKER_UFFD_WP
 	bool arm_uffd_pte = false;

@@ -5,7 +5,6 @@
  * management codes for pgdats, zones and page flags
  */
 
-
 #include <linux/stddef.h>
 #include <linux/mm.h>
 #include <linux/mmzone.h>
@@ -54,8 +53,8 @@ static inline int zref_in_nodemask(struct zoneref *zref, nodemask_t *nodes)
 
 /* Returns the next zone at or below highest_zoneidx in a zonelist */
 struct zoneref *__next_zones_zonelist(struct zoneref *z,
-					enum zone_type highest_zoneidx,
-					nodemask_t *nodes)
+				      enum zone_type highest_zoneidx,
+				      nodemask_t *nodes)
 {
 	/*
 	 * Find the next suitable zone to use for the allocation.
@@ -66,7 +65,7 @@ struct zoneref *__next_zones_zonelist(struct zoneref *z,
 			z++;
 	else
 		while (zonelist_zone_idx(z) > highest_zoneidx ||
-				(zonelist_zone(z) && !zref_in_nodemask(z, nodes)))
+		       (zonelist_zone(z) && !zref_in_nodemask(z, nodes)))
 			z++;
 
 	return z;
@@ -82,6 +81,7 @@ void lruvec_init(struct lruvec *lruvec)
 
 	for_each_lru(lru)
 		INIT_LIST_HEAD(&lruvec->lists[lru]);
+	INIT_LIST_HEAD(&lruvec->pagepatrol_list);
 	/*
 	 * The "Unevictable LRU" is imaginary: though its size is maintained,
 	 * it is never scanned, and unevictable pages are not threaded on it

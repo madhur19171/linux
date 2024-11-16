@@ -70,6 +70,9 @@ obj-y += memblock.o
 obj-y += $(memory-hotplug-y)
 obj-y += slub.o
 
+# PagePatrol
+obj-y += pagepatrol.o
+
 ifdef CONFIG_MMU
 	obj-$(CONFIG_ADVISE_SYSCALLS)	+= madvise.o
 endif
