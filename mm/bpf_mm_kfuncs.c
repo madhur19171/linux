@@ -18,32 +18,68 @@ __bpf_kfunc int bpf_insert_file_vaddr_into_inactive_list(int pid, unsigned long 
 	pg_data_t *pgdat;
 	struct lruvec *lruvec;
 
+	// Validate inputs
+	if (!vaddr) {
+		printk("VA is NULL\n");
+		return -EINVAL;
+	}
+
 	spid = find_get_pid(pid);
+	if (!spid) {
+		printk("pid struct is NULL\n");
+		return -EINVAL;
+	}
 
 	task = get_pid_task(spid, PIDTYPE_PID);
-
-	// Validate inputs
-	if (!task || !vaddr || !spid)
+	if (!task) {
+		printk("task struct is NULL\n");
 		return -EINVAL;
+	}
 
 	mm = get_task_mm(task);
-	if (!mm)
+	if (!mm) {
+		printk("mm struct is NULL\n");
 		return -ESRCH; // No memory structure for this task
+	}
 
 	memcg = get_mem_cgroup_from_mm(mm);
+	if (!memcg) {
+		printk("memcg struct is NULL\n");
+		return -EINVAL;
+	}
 
 	pte = get_locked_pte(mm, vaddr, &ptl);
+	if (!pte) {
+		printk("pte is NULL\n");
+		return -EINVAL;
+	}
 
 	page = pte_page(*pte);
+	if (!page) {
+		printk("page is NULL\n");
+		return -EINVAL;
+	}
 
 	// Release PTE lock
 	pte_unmap_unlock(pte, ptl);
 
 	folio = page_folio(page);
+	if (!folio) {
+		printk("folio is NULL\n");
+		return -EINVAL;
+	}
 
 	pgdat = page_pgdat(&folio->page);
+	if (!pgdat) {
+		printk("pgdat is NULL\n");
+		return -EINVAL;
+	}
 
 	lruvec = mem_cgroup_lruvec(memcg, pgdat);
+	if (!lruvec) {
+		printk("lruvec is NULL\n");
+		return -EINVAL;
+	}
 
 	// Removing from current list
 	lruvec_del_folio(lruvec, folio);
@@ -55,10 +91,7 @@ __bpf_kfunc int bpf_insert_file_vaddr_into_inactive_list(int pid, unsigned long 
 	if (lru != LRU_UNEVICTABLE)
 		list_add(&folio->lru, &lruvec->lists[LRU_INACTIVE_FILE]);
 
-	// Release the page reference
-	put_page(page);
-
-	mmput(mm);
+	printk("Folio for VA(0x%lx) and PID(%d) Added to Inactive List!\n", vaddr, pid);
 
 	return 0;
 }
