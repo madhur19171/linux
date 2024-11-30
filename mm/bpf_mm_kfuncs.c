@@ -84,7 +84,13 @@ __bpf_kfunc int bpf_insert_file_vaddr_into_inactive_list(int pid, unsigned long 
 
 	enum lru_list lru = folio_lru_list(folio);
 
-	if (lru != LRU_UNEVICTABLE) {
+	// Doing folio_test_lru to make sure that we are not messing with the head of LRU list
+	if (
+			lru != LRU_UNEVICTABLE &&	// Do not touch unevictable folios 
+			!folio_test_lru(folio) && 	// Do not mess with LRU list heads otherwise deletion won't be possible
+			folio_test_active(folio)	// Only add to inactive list if the folio is already active. Otherwise it was already inactive
+	) {
+		printk("Processing Folio for VA(0x%lx) and PID(%d)\n", vaddr, pid);
 		// Removing from current list
 		if (folio_isolate_lru(folio)) {
 			printk("Folio for VA(0x%lx) and PID(%d) Removed From Current LRU List!\n", vaddr, pid);
@@ -95,6 +101,8 @@ __bpf_kfunc int bpf_insert_file_vaddr_into_inactive_list(int pid, unsigned long 
 				folio_nr_pages(folio));
 
 		list_add(&folio->lru, &lruvec->lists[LRU_INACTIVE_FILE]);
+
+		folio_clear_active(folio);	// Clear active flag to make the folio inactive
 
 		printk("Folio for VA(0x%lx) and PID(%d) Added to Inactive List!\n", vaddr, pid);
 	}
