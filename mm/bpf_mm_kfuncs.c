@@ -3,6 +3,7 @@
 #include <linux/btf_ids.h>
 #include <linux/mm.h>
 #include <linux/mm_inline.h>
+#include <linux/swap.h>
 #include "internal.h"
 
 __bpf_kfunc_start_defs();
@@ -82,31 +83,12 @@ __bpf_kfunc int bpf_insert_file_vaddr_into_inactive_list(int pid, unsigned long 
 		return -EINVAL;
 	}
 
-	enum lru_list lru = folio_lru_list(folio);
+	long nr_pages = folio_nr_pages(folio);
 
-	// Doing folio_test_lru to make sure that we are not messing with the head of LRU list
-	if (
-			lru != LRU_UNEVICTABLE &&	// Do not touch unevictable folios 
-			!folio_test_lru(folio) && 	// Do not mess with LRU list heads otherwise deletion won't be possible
-			folio_test_active(folio)	// Only add to inactive list if the folio is already active. Otherwise it was already inactive
-	) {
-		printk("Processing Folio for VA(0x%lx) and PID(%d)\n", vaddr, pid);
-		// Removing from current list
-		if (folio_isolate_lru(folio)) {
-			printk("Folio for VA(0x%lx) and PID(%d) Removed From Current LRU List!\n", vaddr, pid);
-		}
+	folio_deactivate(folio);
 
-		// Adding to INACTIVE_FILE list
-		update_lru_size(lruvec, LRU_INACTIVE_FILE, folio_zonenum(folio),
-				folio_nr_pages(folio));
-
-		list_add(&folio->lru, &lruvec->lists[LRU_INACTIVE_FILE]);
-
-		folio_clear_active(folio);	// Clear active flag to make the folio inactive
-
-		printk("Folio for VA(0x%lx) and PID(%d) Added to Inactive List!\n", vaddr, pid);
-	}
-
+	// printk("Deactivated Folio for VA(0x%lx) and PID(%d)\tnr_pages(%ld)\n", vaddr, pid, nr_pages);
+	
 	return 0;
 }
 
@@ -185,22 +167,7 @@ __bpf_kfunc int bpf_pin_file_vaddr(int pid, unsigned long vaddr) {
 		return -EINVAL;
 	}
 
-	enum lru_list lru = folio_lru_list(folio);
-
-	if (lru != LRU_UNEVICTABLE) {
-		// Removing from current list
-		if (folio_isolate_lru(folio)) {
-			printk("Folio for VA(0x%lx) and PID(%d) Removed From Current LRU List!\n", vaddr, pid);
-		}
-
-		// Adding to UNEVICTABLE list
-		update_lru_size(lruvec, LRU_UNEVICTABLE, folio_zonenum(folio),
-				folio_nr_pages(folio));
-
-		list_add(&folio->lru, &lruvec->lists[LRU_UNEVICTABLE]);
-
-		printk("Folio for VA(0x%lx) and PID(%d) Added to Unevictable List!\n", vaddr, pid);
-	}
+	folio_set_unevictable(folio);
 
 	return 0;
 }
