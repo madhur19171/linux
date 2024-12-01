@@ -87,7 +87,7 @@ __bpf_kfunc int bpf_insert_file_vaddr_into_inactive_list(int pid, unsigned long 
 
 	folio_deactivate(folio);
 
-	// printk("Deactivated Folio for VA(0x%lx) and PID(%d)\tnr_pages(%ld)\n", vaddr, pid, nr_pages);
+	printk("Deactivated Folio for VA(0x%lx) and PID(%d)\tnr_pages(%ld)\n", vaddr, pid, nr_pages);
 	
 	return 0;
 }
@@ -168,6 +168,8 @@ __bpf_kfunc int bpf_pin_file_vaddr(int pid, unsigned long vaddr) {
 	}
 
 	folio_set_unevictable(folio);
+
+	printk("Pinned Folio for VA(0x%lx) and PID(%d)\n", vaddr, pid);
 
 	return 0;
 }
