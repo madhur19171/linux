@@ -6,6 +6,8 @@
 #include <linux/swap.h>
 #include "internal.h"
 
+#define MAX_PINNED_PAGES	(1024 * 1024)	/* Maximum number of 4KB pages that are allowed to be pinned */
+
 __bpf_kfunc_start_defs();
 
 __bpf_kfunc int bpf_insert_file_vaddr_into_inactive_list(int pid, unsigned long vaddr) {
@@ -83,26 +85,72 @@ __bpf_kfunc int bpf_insert_file_vaddr_into_inactive_list(int pid, unsigned long 
 		return -EINVAL;
 	}
 
-	long nr_pages = folio_nr_pages(folio);
+	deactivate_file_folio(folio);
 
-	folio_deactivate(folio);
-
-	printk("Deactivated Folio for VA(0x%lx) and PID(%d)\tnr_pages(%ld)\n", vaddr, pid, nr_pages);
+	// printk("Deactivated Folio for VA(0x%lx) and PID(%d)\tnr_pages(%ld)\n", vaddr, pid, nr_pages);
 	
 	return 0;
 }
 
 __bpf_kfunc int bpf_pin_file_vaddr(int pid, unsigned long vaddr) {
 	struct mm_struct *mm;
+	struct page page;
+	struct page* pagep = &page;
+	struct pid *spid;
+	struct task_struct *task;
+	int ret;
+	int locked = 1;
+
+	// Validate inputs
+	if (!vaddr) {
+		printk("VA is NULL\n");
+		return -EINVAL;
+	}
+
+	spid = find_get_pid(pid);
+	if (!spid) {
+		printk("pid struct is NULL\n");
+		return -EINVAL;
+	}
+
+	task = get_pid_task(spid, PIDTYPE_PID);
+	if (!task) {
+		printk("task struct is NULL\n");
+		return -EINVAL;
+	}
+
+	mm = get_task_mm(task);
+	if (!mm) {
+		printk("mm struct is NULL\n");
+		return -ESRCH; // No memory structure for this task
+	}
+
+	mmap_read_lock(mm);
+	ret = pin_user_pages_remote(mm, vaddr,
+			     1,
+			     FOLL_LONGTERM | FOLL_WRITE,
+			     &pagep, &locked);
+	
+	if (!ret) {
+		printk("Failed to pin Folio for VA(0x%lx) and PID(%d)\n", vaddr, pid);
+		mmap_read_unlock(mm);
+		return -1;
+	} else {
+		// printk("Pinned Folio for VA(0x%lx) and PID(%d)\n", vaddr, pid);
+	}
+	mmap_read_unlock(mm);
+
+	return 0;
+}
+
+__bpf_kfunc int bpf_unpin_file_vaddr(int pid, unsigned long vaddr) {
+	struct mm_struct *mm;
 	struct page *page;
 	struct pid *spid;
 	struct task_struct *task;
 	pte_t *pte;
 	spinlock_t *ptl;
-	struct folio *folio;
 	struct mem_cgroup *memcg;
-	pg_data_t *pgdat;
-	struct lruvec *lruvec;
 
 	// Validate inputs
 	if (!vaddr) {
@@ -149,28 +197,10 @@ __bpf_kfunc int bpf_pin_file_vaddr(int pid, unsigned long vaddr) {
 	// Release PTE lock
 	pte_unmap_unlock(pte, ptl);
 
-	folio = page_folio(page);
-	if (!folio) {
-		printk("folio is NULL\n");
-		return -EINVAL;
-	}
-
-	pgdat = page_pgdat(&folio->page);
-	if (!pgdat) {
-		printk("pgdat is NULL\n");
-		return -EINVAL;
-	}
-
-	lruvec = mem_cgroup_lruvec(memcg, pgdat);
-	if (!lruvec) {
-		printk("lruvec is NULL\n");
-		return -EINVAL;
-	}
-
-	folio_set_unevictable(folio);
-
-	printk("Pinned Folio for VA(0x%lx) and PID(%d)\n", vaddr, pid);
-
+	mmap_read_lock(mm);
+	unpin_user_page(page);
+	mmap_read_unlock(mm);
+	
 	return 0;
 }
 
@@ -179,6 +209,7 @@ __bpf_kfunc_end_defs();
 BTF_KFUNCS_START(bpf_mm_kfunc_set_ids)
 BTF_ID_FLAGS(func, bpf_insert_file_vaddr_into_inactive_list)
 BTF_ID_FLAGS(func, bpf_pin_file_vaddr)
+BTF_ID_FLAGS(func, bpf_unpin_file_vaddr)
 BTF_KFUNCS_END(bpf_mm_kfunc_set_ids)
 
 static const struct btf_kfunc_id_set bpf_mm_kfunc_set = {
