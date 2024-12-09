@@ -6010,6 +6010,7 @@ union bpf_attr {
 	FN(cgrp_storage_delete, 211, ##ctx)            \
 	FN(pagepatrol_eviction, 212, ##ctx)            \
 	FN(pagepatrol_skip_page, 213, ##ctx)           \
+	FN(pagepatrol_va_folio, 214, ##ctx)            \
 	/* */
 
 /* backwards-compatibility macros for users of __BPF_FUNC_MAPPER that don't

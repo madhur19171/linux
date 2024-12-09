@@ -179,7 +179,7 @@ struct page {
 
 	/* Usage count. *DO NOT USE DIRECTLY*. See page_ref.h */
 	atomic_t _refcount;
-	struct list_head pagepatrol_lru;
+	unsigned long pp_list;
 
 #ifdef CONFIG_MEMCG
 	unsigned long memcg_data;
@@ -348,7 +348,7 @@ struct folio {
 			};
 			atomic_t _mapcount;
 			atomic_t _refcount;
-			struct list_head pagepatrol_lru;
+			unsigned long pp_list;
 #ifdef CONFIG_MEMCG
 			unsigned long memcg_data;
 #elif defined(CONFIG_SLAB_OBJ_EXT)

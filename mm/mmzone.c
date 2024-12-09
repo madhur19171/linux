@@ -81,7 +81,6 @@ void lruvec_init(struct lruvec *lruvec)
 
 	for_each_lru(lru)
 		INIT_LIST_HEAD(&lruvec->lists[lru]);
-	INIT_LIST_HEAD(&lruvec->pagepatrol_list);
 	/*
 	 * The "Unevictable LRU" is imaginary: though its size is maintained,
 	 * it is never scanned, and unevictable pages are not threaded on it

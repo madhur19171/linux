@@ -242,10 +242,6 @@ static inline struct folio *lru_to_folio(struct list_head *head)
 {
 	return list_entry((head)->prev, struct folio, lru);
 }
-static inline struct folio *pagepatrol_lru_to_folio(struct list_head *head)
-{
-	return list_entry((head)->prev, struct folio, pagepatrol_lru);
-}
 
 void setup_initial_init_mm(void *start_code, void *end_code, void *end_data,
 			   void *brk);
@@ -2391,6 +2387,11 @@ static inline int task_mm_cid(struct task_struct *t)
 	return raw_smp_processor_id();
 }
 #endif
+
+/* PagePatrol -giammi */
+extern int do_mlock_pagepatrol(unsigned long start, size_t len,
+			       vm_flags_t flags);
+extern int munlock_pagepatrol(unsigned long start, size_t len);
 
 #ifdef CONFIG_MMU
 extern bool can_do_mlock(void);

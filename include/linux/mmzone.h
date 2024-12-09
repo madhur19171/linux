@@ -278,7 +278,6 @@ enum lru_list {
 	LRU_ACTIVE_ANON = LRU_BASE + LRU_ACTIVE,
 	LRU_INACTIVE_FILE = LRU_BASE + LRU_FILE,
 	LRU_ACTIVE_FILE = LRU_BASE + LRU_FILE + LRU_ACTIVE,
-	LRU_PAGEPATROL, /* considered unevictabled */
 	LRU_UNEVICTABLE,
 	NR_LRU_LISTS
 };
@@ -603,7 +602,6 @@ static inline void lru_gen_soft_reclaim(struct mem_cgroup *memcg, int nid)
 
 struct lruvec {
 	struct list_head lists[NR_LRU_LISTS];
-	struct list_head pagepatrol_list;
 	/* per lruvec lru_lock for memcg */
 	spinlock_t lru_lock;
 	/*

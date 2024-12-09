@@ -2,6 +2,7 @@
 #ifndef _LINUX_PAGEPATROL_H
 #define _LINUX_PAGEPATROL_H
 #include <linux/types.h>
+#include <linux/syscalls.h>
 
 extern inline void pagepatrol_set_mru(void);
 extern inline void pagepatrol_clear_mru(void);
@@ -14,5 +15,8 @@ extern inline u64 pagepatrol_is_single_list(void);
 extern inline void pagepatrol_set_skip_page(void);
 extern inline void pagepatrol_clear_skip_page(void);
 extern inline u64 pagepatrol_get_skip_page(void);
+
+extern inline void pagepatrol_set_mm_addr(unsigned long addr);
+extern inline unsigned long pagepatrol_get_mm_addr(void);
 
 #endif

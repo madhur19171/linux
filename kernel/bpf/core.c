@@ -2831,6 +2831,7 @@ const struct bpf_func_proto bpf_get_retval_proto __weak;
 /* PagePatrol */
 const struct bpf_func_proto bpf_pagepatrol_eviction_proto __weak;
 const struct bpf_func_proto bpf_pagepatrol_skip_page_proto __weak;
+const struct bpf_func_proto bpf_pagepatrol_va_folio_proto __weak;
 
 const struct bpf_func_proto *__weak bpf_get_trace_printk_proto(void)
 {

@@ -3301,6 +3301,7 @@ extern const struct bpf_func_proto bpf_cgrp_storage_delete_proto;
 /* PagePatrol */
 extern const struct bpf_func_proto bpf_pagepatrol_eviction_proto;
 extern const struct bpf_func_proto bpf_pagepatrol_skip_page_proto;
+extern const struct bpf_func_proto bpf_pagepatrol_va_folio_proto;
 
 const struct bpf_func_proto *
 tracing_prog_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog);

@@ -750,8 +750,9 @@ static int __remove_mapping(struct address_space *mapping, struct folio *folio,
 	 * and thus under the i_pages lock, then this ordering is not required.
 	 */
 	refcount = 1 + folio_nr_pages(folio);
-	if (!folio_ref_freeze(folio, refcount))
+	if (!folio_ref_freeze(folio, refcount)) {
 		goto cannot_free;
+	}
 	/* note: atomic_cmpxchg in folio_ref_freeze provides the smp_rmb */
 	if (unlikely(folio_test_dirty(folio))) {
 		folio_ref_unfreeze(folio, refcount);
@@ -830,8 +831,12 @@ long remove_mapping(struct address_space *mapping, struct folio *folio)
 		 * atomic operation.
 		 */
 		folio_ref_unfreeze(folio, 1);
+		if (folio_nr_pages(folio) == 0) {
+			printk("empty folio\n");
+		}
 		return folio_nr_pages(folio);
 	}
+	printk("remove mapping returns 0\n");
 	return 0;
 }
 
@@ -1073,7 +1078,7 @@ retry:
 		folio = lru_to_folio(folio_list);
 		list_del(&folio->lru);
 
-		if (!folio_trylock(folio))
+		if (folio_test_unevictable(folio) || !folio_trylock(folio))
 			goto keep;
 
 		VM_BUG_ON_FOLIO(folio_test_active(folio), folio);
@@ -1637,133 +1642,6 @@ static __always_inline void update_lru_sizes(struct lruvec *lruvec,
 	}
 }
 
-#pragma GCC push_options
-#pragma GCC optimize("O0")
-static unsigned long skip_folio_pagepatrol(struct folio *folio)
-{
-	(void)folio;
-	return 0;
-}
-#pragma GCC pop_options
-
-/*
- * Isolating page from the lruvec to fill in @dst list by nr_to_scan times.
- *
- * lruvec->lru_lock is heavily contended.  Some of the functions that
- * shrink the lists perform better by taking out a batch of pages
- * and working on them outside the LRU lock.
- *
- * For pagecache intensive workloads, this function is the hottest
- * spot in the kernel (apart from copy_*_user functions).
- *
- * Lru_lock must be held before calling this function.
- *
- * @nr_to_scan:	The number of eligible pages to look through on the list.
- * @lruvec:	The LRU vector to pull pages from.
- * @dst:	The temp list to put pages on to.
- * @nr_scanned:	The number of pages that were scanned.
- * @sc:		The scan_control struct for this reclaim session
- * @lru:	LRU list id for isolating
- *
- * returns how many pages were moved onto *@dst.
- */
-static unsigned long isolate_lru_folios_pagepatrol_mru(
-	unsigned long nr_to_scan, struct lruvec *lruvec, struct list_head *dst,
-	unsigned long *nr_scanned, struct scan_control *sc, enum lru_list lru)
-{
-	struct list_head *src = &lruvec->lists[lru];
-	unsigned long nr_taken = 0;
-	unsigned long nr_zone_taken[MAX_NR_ZONES] = { 0 };
-	unsigned long nr_skipped[MAX_NR_ZONES] = {
-		0,
-	};
-	unsigned long skipped = 0;
-	unsigned long scan, total_scan, nr_pages;
-	LIST_HEAD(folios_skipped);
-
-	total_scan = 0;
-	scan = 0;
-	while (scan < nr_to_scan && !list_empty(src)) {
-		struct list_head *move_to = src;
-		struct folio *folio;
-
-		folio = lru_to_folio(src);
-		prefetchw_prev_lru_folio(folio, src, flags);
-
-		nr_pages = folio_nr_pages(folio);
-		total_scan += nr_pages;
-
-		pagepatrol_clear_skip_page();
-		skip_folio_pagepatrol(folio);
-		unsigned long skip = pagepatrol_get_skip_page();
-		if (skip || folio_zonenum(folio) > sc->reclaim_idx) {
-			nr_skipped[folio_zonenum(folio)] += nr_pages;
-			move_to = &folios_skipped;
-			goto move;
-		}
-
-		/*
-		 * Do not count skipped folios because that makes the function
-		 * return with no isolated folios if the LRU mostly contains
-		 * ineligible folios.  This causes the VM to not reclaim any
-		 * folios, triggering a premature OOM.
-		 * Account all pages in a folio.
-		 */
-		scan += nr_pages;
-
-		if (!folio_test_lru(folio))
-			goto move;
-		if (!sc->may_unmap && folio_mapped(folio))
-			goto move;
-
-		/*
-		 * Be careful not to clear the lru flag until after we're
-		 * sure the folio is not being freed elsewhere -- the
-		 * folio release code relies on it.
-		 */
-		if (unlikely(!folio_try_get(folio)))
-			goto move;
-
-		if (!folio_test_clear_lru(folio)) {
-			/* Another thread is already isolating this folio */
-			folio_put(folio);
-			goto move;
-		}
-
-		nr_taken += nr_pages;
-		nr_zone_taken[folio_zonenum(folio)] += nr_pages;
-		move_to = dst;
-move:
-		list_move(&folio->lru, move_to);
-	}
-
-	/*
-	 * Splice any skipped folios to the start of the LRU list. Note that
-	 * this disrupts the LRU order when reclaiming for lower zones but
-	 * we cannot splice to the tail. If we did then the SWAP_CLUSTER_MAX
-	 * scanning would soon rescan the same folios to skip and waste lots
-	 * of cpu cycles.
-	 */
-	if (!list_empty(&folios_skipped)) {
-		int zid;
-
-		list_splice(&folios_skipped, src);
-		for (zid = 0; zid < MAX_NR_ZONES; zid++) {
-			if (!nr_skipped[zid])
-				continue;
-
-			__count_zid_vm_events(PGSCAN_SKIP, zid,
-					      nr_skipped[zid]);
-			skipped += nr_skipped[zid];
-		}
-	}
-	*nr_scanned = total_scan;
-	trace_mm_vmscan_lru_isolate(sc->reclaim_idx, sc->order, nr_to_scan,
-				    total_scan, skipped, nr_taken, lru);
-	update_lru_sizes(lruvec, lru, nr_zone_taken);
-	return nr_taken;
-}
-
 /*
  * Isolating page from the lruvec to fill in @dst list by nr_to_scan times.
  *
@@ -2050,110 +1928,6 @@ static int current_may_throttle(void)
 }
 
 /*
- * shrink_inactive_list_pagepatrol_mru() moves folios from the inactive MRU to the active MRU.
- *
- * The idea is to push some inactive pages to active list, so that
- * they will be evicted at some point
- */
-static unsigned long
-shrink_inactive_list_pagepatrol_mru(unsigned long nr_to_scan,
-				    struct lruvec *lruvec,
-				    struct scan_control *sc, enum lru_list lru)
-{
-	unsigned long nr_taken;
-	unsigned long nr_scanned;
-	unsigned long nr_moved;
-	unsigned long vm_flags;
-	LIST_HEAD(l_hold); /* The folios which were snipped off */
-	LIST_HEAD(l_active);
-	LIST_HEAD(l_inactive);
-	unsigned nr_deactivate, nr_activate;
-	unsigned nr_rotated = 0;
-	bool file = is_file_lru(lru);
-	struct pglist_data *pgdat = lruvec_pgdat(lruvec);
-
-	lru_add_drain();
-
-	spin_lock_irq(&lruvec->lru_lock);
-
-	nr_taken = isolate_lru_folios(nr_to_scan, lruvec, &l_hold, &nr_scanned,
-				      sc, lru);
-
-	__mod_node_page_state(pgdat, NR_ISOLATED_ANON + file, nr_taken);
-
-	if (!cgroup_reclaim(sc))
-		__count_vm_events(PGREFILL, nr_scanned);
-	__count_memcg_events(lruvec_memcg(lruvec), PGREFILL, nr_scanned);
-
-	spin_unlock_irq(&lruvec->lru_lock);
-
-	while (!list_empty(&l_hold)) {
-		struct folio *folio;
-
-		cond_resched();
-		folio = lru_to_folio(&l_hold);
-		list_del(&folio->lru);
-
-		if (unlikely(!folio_evictable(folio))) {
-			folio_putback_lru(folio);
-			continue;
-		}
-
-		if (unlikely(buffer_heads_over_limit)) {
-			if (folio_needs_release(folio) &&
-			    folio_trylock(folio)) {
-				filemap_release_folio(folio, 0);
-				folio_unlock(folio);
-			}
-		}
-
-		/* Referenced or rmap lock contention: rotate */
-		if (folio_referenced(folio, 0, sc->target_mem_cgroup,
-				     &vm_flags) != 0) {
-			/*
-		 	 * Identify referenced, file-backed active folios and
-		 	 * give them one more trip around the active list. So
-		 	 * that executable code get better chances to stay in
-		 	 * memory under moderate memory pressure.  Anon folios
-		 	 * are not likely to be evicted by use-once streaming
-		 	 * IO, plus JVM can create lots of anon VM_EXEC folios,
-		 	 * so we ignore them here.
-		 	 */
-			if ((vm_flags & VM_EXEC) && folio_is_file_lru(folio)) {
-				nr_rotated += folio_nr_pages(folio);
-				// list_add(&folio->lru, &l_active);
-				list_add(&folio->lru, &l_inactive);
-				continue;
-			}
-		}
-
-		folio_set_active(folio); /* we are activating */
-		folio_set_workingset(folio);
-		list_add(&folio->lru, &l_active);
-		nr_moved++;
-	}
-
-	/*
-	 * Move folios back to the lru list.
-	 */
-	spin_lock_irq(&lruvec->lru_lock);
-
-	nr_activate = move_folios_to_lru(lruvec, &l_active);
-	nr_deactivate = move_folios_to_lru(lruvec, &l_inactive);
-
-	//__count_vm_events(PGDEACTIVATE, nr_deactivate);
-	//__count_memcg_events(lruvec_memcg(lruvec), PGDEACTIVATE, nr_deactivate);
-
-	__mod_node_page_state(pgdat, NR_ISOLATED_ANON + file, -nr_taken);
-	spin_unlock_irq(&lruvec->lru_lock);
-
-	if (nr_rotated)
-		lru_note_cost(lruvec, file, 0, nr_rotated);
-
-	return nr_moved;
-}
-
-/*
  * shrink_inactive_list() is a helper for shrink_node().  It returns the number
  * of reclaimed pages
  */
@@ -2162,13 +1936,6 @@ static unsigned long shrink_inactive_list(unsigned long nr_to_scan,
 					  struct scan_control *sc,
 					  enum lru_list lru)
 {
-	if (pagepatrol_is_mru()) {
-		/* PagePatrol: mru ... not evicting from inactive but from active */
-		return shrink_inactive_list_pagepatrol_mru(nr_to_scan, lruvec,
-							   sc, lru);
-		(void)shrink_inactive_list_pagepatrol_mru;
-	}
-
 	LIST_HEAD(folio_list);
 	unsigned long nr_scanned;
 	unsigned int nr_reclaimed = 0;
@@ -2196,10 +1963,8 @@ static unsigned long shrink_inactive_list(unsigned long nr_to_scan,
 
 	spin_lock_irq(&lruvec->lru_lock);
 
-	// nr_taken = isolate_lru_folios(nr_to_scan, lruvec, &folio_list,
-	// 			      &nr_scanned, sc, lru);
-	nr_taken = isolate_lru_folios_pagepatrol_mru(
-		nr_to_scan, lruvec, &folio_list, &nr_scanned, sc, lru);
+	nr_taken = isolate_lru_folios(nr_to_scan, lruvec, &folio_list,
+				      &nr_scanned, sc, lru);
 
 	__mod_node_page_state(pgdat, NR_ISOLATED_ANON + file, nr_taken);
 	item = PGSCAN_KSWAPD + reclaimer_offset();
@@ -2272,110 +2037,6 @@ static unsigned long shrink_inactive_list(unsigned long nr_to_scan,
 }
 
 /*
- * shrink_active_list_pagepatrol_mru() is a helper for shrink_node().  It returns the number
- * of reclaimed pages
- *
- * it will reclaim active pages (MRU)
- */
-static void shrink_active_list_pagepatrol_mru(unsigned long nr_to_scan,
-					      struct lruvec *lruvec,
-					      struct scan_control *sc,
-					      enum lru_list lru)
-{
-	LIST_HEAD(folio_list);
-	unsigned long nr_scanned;
-	unsigned int nr_reclaimed = 0;
-	unsigned long nr_taken;
-	struct reclaim_stat stat;
-	bool file = is_file_lru(lru);
-	enum vm_event_item item;
-	struct pglist_data *pgdat = lruvec_pgdat(lruvec);
-	bool stalled = false;
-
-	while (unlikely(too_many_isolated(pgdat, file, sc))) {
-		if (stalled)
-			return;
-
-		/* wait a bit for the reclaimer. */
-		stalled = true;
-		reclaim_throttle(pgdat, VMSCAN_THROTTLE_ISOLATED);
-
-		/* We are about to die and free our memory. Return now. */
-		if (fatal_signal_pending(current))
-			return;
-	}
-
-	lru_add_drain();
-
-	spin_lock_irq(&lruvec->lru_lock);
-
-	nr_taken = isolate_lru_folios_pagepatrol_mru(
-		nr_to_scan, lruvec, &folio_list, &nr_scanned, sc, lru);
-
-	__mod_node_page_state(pgdat, NR_ISOLATED_ANON + file, nr_taken);
-	item = PGSCAN_KSWAPD + reclaimer_offset();
-	if (!cgroup_reclaim(sc))
-		__count_vm_events(item, nr_scanned);
-	__count_memcg_events(lruvec_memcg(lruvec), item, nr_scanned);
-	__count_vm_events(PGSCAN_ANON + file, nr_scanned);
-
-	spin_unlock_irq(&lruvec->lru_lock);
-
-	if (nr_taken == 0)
-		return;
-
-	nr_reclaimed = shrink_folio_list(&folio_list, pgdat, sc, &stat, false);
-
-	spin_lock_irq(&lruvec->lru_lock);
-	move_folios_to_lru(lruvec, &folio_list);
-
-	__mod_node_page_state(pgdat, NR_ISOLATED_ANON + file, -nr_taken);
-	item = PGSTEAL_KSWAPD + reclaimer_offset();
-	if (!cgroup_reclaim(sc))
-		__count_vm_events(item, nr_reclaimed);
-	__count_memcg_events(lruvec_memcg(lruvec), item, nr_reclaimed);
-	__count_vm_events(PGSTEAL_ANON + file, nr_reclaimed);
-	spin_unlock_irq(&lruvec->lru_lock);
-
-	lru_note_cost(lruvec, file, stat.nr_pageout, nr_scanned - nr_reclaimed);
-
-	/*
-	 * If dirty folios are scanned that are not queued for IO, it
-	 * implies that flushers are not doing their job. This can
-	 * happen when memory pressure pushes dirty folios to the end of
-	 * the LRU before the dirty limits are breached and the dirty
-	 * data has expired. It can also happen when the proportion of
-	 * dirty folios grows not through writes but through memory
-	 * pressure reclaiming all the clean cache. And in some cases,
-	 * the flushers simply cannot keep up with the allocation
-	 * rate. Nudge the flusher threads in case they are asleep.
-	 */
-	if (stat.nr_unqueued_dirty == nr_taken) {
-		wakeup_flusher_threads(WB_REASON_VMSCAN);
-		/*
-		 * For cgroupv1 dirty throttling is achieved by waking up
-		 * the kernel flusher here and later waiting on folios
-		 * which are in writeback to finish (see shrink_folio_list()).
-		 *
-		 * Flusher may not be able to issue writeback quickly
-		 * enough for cgroupv1 writeback throttling to work
-		 * on a large system.
-		 */
-		if (!writeback_throttling_sane(sc))
-			reclaim_throttle(pgdat, VMSCAN_THROTTLE_WRITEBACK);
-	}
-
-	sc->nr.dirty += stat.nr_dirty;
-	sc->nr.congested += stat.nr_congested;
-	sc->nr.unqueued_dirty += stat.nr_unqueued_dirty;
-	sc->nr.writeback += stat.nr_writeback;
-	sc->nr.immediate += stat.nr_immediate;
-	sc->nr.taken += nr_taken;
-	if (file)
-		sc->nr.file_taken += nr_taken;
-}
-
-/*
  * shrink_active_list() moves folios from the active LRU to the inactive LRU.
  *
  * We move them the other way if the folio is referenced by one or more
@@ -2395,12 +2056,6 @@ static void shrink_active_list_pagepatrol_mru(unsigned long nr_to_scan,
 static void shrink_active_list(unsigned long nr_to_scan, struct lruvec *lruvec,
 			       struct scan_control *sc, enum lru_list lru)
 {
-	if (pagepatrol_is_mru()) {
-		/* PagePatrol: mru ... not evicting from inactive but from active */
-		shrink_active_list_pagepatrol_mru(nr_to_scan, lruvec, sc, lru);
-		return;
-	}
-
 	unsigned long nr_taken;
 	unsigned long nr_scanned;
 	unsigned long vm_flags;
@@ -2745,8 +2400,6 @@ static void get_scan_count(struct lruvec *lruvec, struct scan_control *sc,
 	enum scan_balance scan_balance;
 	unsigned long ap, fp;
 	enum lru_list lru;
-	/* For PagePatrol list */
-	unsigned long totalscan = 0;
 
 	/* If we have no swap space, do not bother scanning anon folios. */
 	if (!sc->may_swap ||
@@ -2930,10 +2583,7 @@ out:
 		}
 
 		nr[lru] = scan;
-		totalscan += scan;
 	}
-
-	nr[LRU_PAGEPATROL] = totalscan;
 }
 
 /*
@@ -6139,35 +5789,8 @@ static void lru_gen_shrink_node(struct pglist_data *pgdat,
 
 #endif /* CONFIG_LRU_GEN */
 
-/*
- * so we have our list 
- * we just try to remove from it 
- */
-static void shrink_lruvec_pagepatrol(struct lruvec *lruvec,
-				     struct scan_control *sc)
-{
-	unsigned long nr_to_scan = 200;
-	unsigned long nr_reclaimed = 0;
-	struct blk_plug plug;
-
-	blk_start_plug(&plug);
-	nr_reclaimed += shrink_list(LRU_PAGEPATROL, 2000, lruvec, sc);
-	// nr_reclaimed += shrink_pagepatrol_list(nr_to_scan, lruvec, sc,
-	// 				       LRU_INACTIVE_FILE);
-	// nr_reclaimed +=
-	// 	shrink_pagepatrol_list(nr_to_scan, lruvec, sc, LRU_ACTIVE_FILE);
-	nr_reclaimed += shrink_list(LRU_INACTIVE_ANON, nr_to_scan, lruvec, sc);
-	nr_reclaimed += shrink_list(LRU_ACTIVE_ANON, nr_to_scan, lruvec, sc);
-	blk_finish_plug(&plug);
-	sc->nr_reclaimed += nr_reclaimed;
-}
-
 static void shrink_lruvec(struct lruvec *lruvec, struct scan_control *sc)
 {
-	// shrink_lruvec_pagepatrol(lruvec, sc);
-	// return;
-	(void)shrink_lruvec_pagepatrol;
-
 	unsigned long nr[NR_LRU_LISTS];
 	unsigned long targets[NR_LRU_LISTS];
 	unsigned long nr_to_scan;

@@ -28,6 +28,11 @@
 
 /* PagePatrol */
 #include <linux/pagepatrol.h>
+#include "../include/linux/memory.h"
+#include "../include/linux/mm_inline.h"
+#include "../include/linux/memcontrol.h"
+#include "../include/linux/pagewalk.h"
+#include "../include/linux/maple_tree.h"
 
 /* If kernel subsystem is allowing eBPF programs to call this function,
  * inside its own verifier_ops->get_func_proto() callback it should return
@@ -2067,6 +2072,8 @@ const struct bpf_func_proto *bpf_base_func_proto(enum bpf_func_id func_id,
 		return &bpf_pagepatrol_eviction_proto;
 	case BPF_FUNC_pagepatrol_skip_page:
 		return &bpf_pagepatrol_skip_page_proto;
+	case BPF_FUNC_pagepatrol_va_folio:
+		return &bpf_pagepatrol_va_folio_proto;
 	default:
 		return NULL;
 	}
@@ -3258,16 +3265,6 @@ void *__bpf_dynptr_data_rw(const struct bpf_dynptr_kern *ptr, u32 len)
 
 BPF_CALL_2(bpf_pagepatrol_eviction, u64, is_mru, u64, single_list)
 {
-	if (is_mru)
-		pagepatrol_set_mru();
-	else
-		pagepatrol_clear_mru();
-
-	if (single_list)
-		pagepatrol_set_single_list();
-	else
-		pagepatrol_clear_single_list();
-
 	return 1;
 }
 
@@ -3281,12 +3278,6 @@ const struct bpf_func_proto bpf_pagepatrol_eviction_proto = {
 
 BPF_CALL_1(bpf_pagepatrol_skip_page, u64, skip)
 {
-	/* TODO: make this atomic */
-	if (skip)
-		pagepatrol_set_skip_page();
-	else
-		pagepatrol_clear_skip_page();
-
 	return 1;
 }
 
@@ -3295,4 +3286,19 @@ const struct bpf_func_proto bpf_pagepatrol_skip_page_proto = {
 	.gpl_only = false,
 	.ret_type = RET_INTEGER,
 	.arg1_type = ARG_ANYTHING,
+};
+
+BPF_CALL_3(bpf_pagepatrol_va_folio, unsigned long, va, u64, pid, u64,
+	   unevictable)
+{
+	return 0;
+}
+
+const struct bpf_func_proto bpf_pagepatrol_va_folio_proto = {
+	.func = bpf_pagepatrol_va_folio,
+	.gpl_only = false,
+	.ret_type = RET_PTR_TO_MEM,
+	.arg1_type = ARG_ANYTHING,
+	.arg2_type = ARG_ANYTHING,
+	.arg3_type = ARG_ANYTHING,
 };

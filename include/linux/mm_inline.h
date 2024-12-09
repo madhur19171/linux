@@ -333,12 +333,6 @@ static __always_inline void lruvec_add_folio(struct lruvec *lruvec,
 					     struct folio *folio)
 {
 	enum lru_list lru = folio_lru_list(folio);
-	// if (pagepatrol_is_single_list()) {
-	// 	if (lru == LRU_INACTIVE_FILE)
-	// 		lru = LRU_ACTIVE_FILE;
-	// 	if (lru == LRU_INACTIVE_ANON)
-	// 		lru = LRU_ACTIVE_ANON;
-	// }
 
 	if (lru_gen_add_folio(lruvec, folio, false))
 		return;
@@ -347,22 +341,26 @@ static __always_inline void lruvec_add_folio(struct lruvec *lruvec,
 			folio_nr_pages(folio));
 	if (lru != LRU_UNEVICTABLE) {
 		list_add(&folio->lru, &lruvec->lists[lru]);
-		/* PagePatrol: add to the end */
-		list_add(&folio->pagepatrol_lru,
-			 &lruvec->lists[LRU_PAGEPATROL]);
 	}
+}
+
+static __always_inline void lruvec_add_folio_lru(struct lruvec *lruvec,
+						 struct folio *folio,
+						 enum lru_list lru)
+{
+	if (lru_gen_add_folio(lruvec, folio, false))
+		return;
+
+	update_lru_size(lruvec, lru, folio_zonenum(folio),
+			folio_nr_pages(folio));
+	if (lru != LRU_UNEVICTABLE)
+		list_add(&folio->lru, &lruvec->lists[lru]);
 }
 
 static __always_inline void lruvec_add_folio_tail(struct lruvec *lruvec,
 						  struct folio *folio)
 {
 	enum lru_list lru = folio_lru_list(folio);
-	// if (pagepatrol_is_single_list()) {
-	// 	if (lru == LRU_INACTIVE_FILE)
-	// 		lru = LRU_ACTIVE_FILE;
-	// 	if (lru == LRU_INACTIVE_ANON)
-	// 		lru = LRU_ACTIVE_ANON;
-	// }
 
 	if (lru_gen_add_folio(lruvec, folio, true))
 		return;
@@ -371,8 +369,6 @@ static __always_inline void lruvec_add_folio_tail(struct lruvec *lruvec,
 			folio_nr_pages(folio));
 	/* This is not expected to be used on LRU_UNEVICTABLE */
 	list_add_tail(&folio->lru, &lruvec->lists[lru]);
-	/* PagePatrol */
-	list_add_tail(&folio->pagepatrol_lru, &lruvec->lists[LRU_PAGEPATROL]);
 }
 
 static __always_inline void lruvec_del_folio(struct lruvec *lruvec,
@@ -385,10 +381,6 @@ static __always_inline void lruvec_del_folio(struct lruvec *lruvec,
 
 	if (lru != LRU_UNEVICTABLE) {
 		list_del(&folio->lru);
-		if (folio_is_file_lru(folio)) {
-			/* PagePatrol */
-			list_del(&folio->pagepatrol_lru);
-		}
 	}
 	update_lru_size(lruvec, lru, folio_zonenum(folio),
 			-folio_nr_pages(folio));
