@@ -2074,6 +2074,10 @@ const struct bpf_func_proto *bpf_base_func_proto(enum bpf_func_id func_id,
 		return &bpf_pagepatrol_skip_page_proto;
 	case BPF_FUNC_pagepatrol_va_folio:
 		return &bpf_pagepatrol_va_folio_proto;
+	case BPF_FUNC_pagepatrol_pin:
+		return &bpf_pagepatrol_pin_proto;
+	case BPF_FUNC_pagepatrol_unpin:
+		return &bpf_pagepatrol_unpin_proto;
 	default:
 		return NULL;
 	}
@@ -3301,4 +3305,31 @@ const struct bpf_func_proto bpf_pagepatrol_va_folio_proto = {
 	.arg1_type = ARG_ANYTHING,
 	.arg2_type = ARG_ANYTHING,
 	.arg3_type = ARG_ANYTHING,
+};
+
+BPF_CALL_2(bpf_pagepatrol_pin, u64, pid, unsigned long, addr)
+{
+	// printk("pinning %ld\n", addr);
+	return pagepatrol_eviction(pid, 20, addr, 0);
+}
+
+const struct bpf_func_proto bpf_pagepatrol_pin_proto = {
+	.func = bpf_pagepatrol_pin,
+	.gpl_only = false,
+	.ret_type = RET_INTEGER,
+	.arg1_type = ARG_ANYTHING,
+	.arg2_type = ARG_ANYTHING,
+};
+
+BPF_CALL_2(bpf_pagepatrol_unpin, u64, pid, unsigned long, addr)
+{
+	return 1;
+}
+
+const struct bpf_func_proto bpf_pagepatrol_unpin_proto = {
+	.func = bpf_pagepatrol_unpin,
+	.gpl_only = false,
+	.ret_type = RET_INTEGER,
+	.arg1_type = ARG_ANYTHING,
+	.arg2_type = ARG_ANYTHING,
 };

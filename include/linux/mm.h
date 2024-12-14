@@ -288,7 +288,7 @@ extern unsigned int kobjsize(const void *objp);
 #define VM_GROWSDOWN 0x00000100 /* general info on the segment */
 #ifdef CONFIG_MMU
 #define VM_UFFD_MISSING 0x00000200 /* missing pages tracking */
-#else /* CONFIG_MMU */
+#else				   /* CONFIG_MMU */
 #define VM_MAYOVERLAY \
 	0x00000200 /* nommu: R/O MAP_PRIVATE mapping that might overlay a file mapping */
 #define VM_UFFD_MISSING 0
@@ -301,20 +301,20 @@ extern unsigned int kobjsize(const void *objp);
 #define VM_IO 0x00004000 /* Memory mapped I/O or similar */
 
 /* Used by sys_madvise() */
-#define VM_SEQ_READ 0x00008000 /* App will access data sequentially */
+#define VM_SEQ_READ 0x00008000	/* App will access data sequentially */
 #define VM_RAND_READ 0x00010000 /* App will not benefit from clustered reads */
 
-#define VM_DONTCOPY 0x00020000 /* Do not copy this vma on fork */
+#define VM_DONTCOPY 0x00020000	 /* Do not copy this vma on fork */
 #define VM_DONTEXPAND 0x00040000 /* Cannot expand with mremap() */
 #define VM_LOCKONFAULT \
 	0x00080000 /* Lock the pages covered when they are faulted in */
-#define VM_ACCOUNT 0x00100000 /* Is a VM accounted object */
-#define VM_NORESERVE 0x00200000 /* should the VM suppress accounting */
-#define VM_HUGETLB 0x00400000 /* Huge TLB Page VM */
-#define VM_SYNC 0x00800000 /* Synchronous page faults */
-#define VM_ARCH_1 0x01000000 /* Architecture-specific flag */
+#define VM_ACCOUNT 0x00100000	 /* Is a VM accounted object */
+#define VM_NORESERVE 0x00200000	 /* should the VM suppress accounting */
+#define VM_HUGETLB 0x00400000	 /* Huge TLB Page VM */
+#define VM_SYNC 0x00800000	 /* Synchronous page faults */
+#define VM_ARCH_1 0x01000000	 /* Architecture-specific flag */
 #define VM_WIPEONFORK 0x02000000 /* Wipe VMA contents in child. */
-#define VM_DONTDUMP 0x04000000 /* Do not include in the core dump */
+#define VM_DONTDUMP 0x04000000	 /* Do not include in the core dump */
 
 #ifdef CONFIG_MEM_SOFT_DIRTY
 #define VM_SOFTDIRTY 0x08000000 /* Not soft dirty clean area */
@@ -324,9 +324,9 @@ extern unsigned int kobjsize(const void *objp);
 
 #define VM_MIXEDMAP \
 	0x10000000 /* Can contain "struct page" and pure PFN pages */
-#define VM_HUGEPAGE 0x20000000 /* MADV_HUGEPAGE marked this vma */
+#define VM_HUGEPAGE 0x20000000	 /* MADV_HUGEPAGE marked this vma */
 #define VM_NOHUGEPAGE 0x40000000 /* MADV_NOHUGEPAGE marked this vma */
-#define VM_MERGEABLE 0x80000000 /* KSM may merge identical pages */
+#define VM_MERGEABLE 0x80000000	 /* KSM may merge identical pages */
 
 #ifdef CONFIG_ARCH_USES_HIGH_VMA_FLAGS
 #define VM_HIGH_ARCH_BIT_0 32 /* bit only usable on 64-bit architectures */
@@ -392,7 +392,7 @@ extern unsigned int kobjsize(const void *objp);
 #endif
 
 #if defined(CONFIG_ARM64_MTE)
-#define VM_MTE VM_HIGH_ARCH_4 /* Use Tagged memory for access control */
+#define VM_MTE VM_HIGH_ARCH_4	      /* Use Tagged memory for access control */
 #define VM_MTE_ALLOWED VM_HIGH_ARCH_5 /* Tagged memory permitted */
 #else
 #define VM_MTE VM_NONE
@@ -552,17 +552,17 @@ static inline bool fault_flag_allow_retry_first(enum fault_flag flags)
 struct vm_fault {
 	const struct {
 		struct vm_area_struct *vma; /* Target VMA */
-		gfp_t gfp_mask; /* gfp mask to be used for allocations */
-		pgoff_t pgoff; /* Logical page offset based on vma */
+		gfp_t gfp_mask;	       /* gfp mask to be used for allocations */
+		pgoff_t pgoff;	       /* Logical page offset based on vma */
 		unsigned long address; /* Faulting virtual address - masked */
 		unsigned long
 			real_address; /* Faulting virtual address - unmasked */
 	};
 	enum fault_flag flags; /* FAULT_FLAG_xxx flags
 					 * XXX: should really be 'const' */
-	pmd_t *pmd; /* Pointer to pmd entry matching
+	pmd_t *pmd;	       /* Pointer to pmd entry matching
 					 * the 'address' */
-	pud_t *pud; /* Pointer to pud entry matching
+	pud_t *pud;	       /* Pointer to pud entry matching
 					 * the 'address'
 					 */
 	union {
@@ -573,17 +573,17 @@ struct vm_fault {
 	};
 
 	struct page *cow_page; /* Page handler may use for COW fault */
-	struct page *page; /* ->fault handlers should return a
+	struct page *page;     /* ->fault handlers should return a
 					 * page here, unless VM_FAULT_NOPAGE
 					 * is set (which is also implied by
 					 * VM_FAULT_ERROR).
 					 */
 	/* These three entries are valid only while holding ptl lock */
-	pte_t *pte; /* Pointer to pte entry matching
+	pte_t *pte;		/* Pointer to pte entry matching
 					 * the 'address'. NULL if the page
 					 * table hasn't been allocated.
 					 */
-	spinlock_t *ptl; /* Page table lock.
+	spinlock_t *ptl;	/* Page table lock.
 					 * Protects pte page table if 'pte'
 					 * is not NULL, otherwise pmd.
 					 */
@@ -1445,7 +1445,7 @@ static inline bool put_devmap_managed_folio_refs(struct folio *folio, int refs)
 		return false;
 	return __put_devmap_managed_folio_refs(folio, refs);
 }
-#else /* CONFIG_ZONE_DEVICE && CONFIG_FS_DAX */
+#else  /* CONFIG_ZONE_DEVICE && CONFIG_FS_DAX */
 static inline bool put_devmap_managed_folio_refs(struct folio *folio, int refs)
 {
 	return false;
@@ -1765,7 +1765,7 @@ static inline void vma_set_access_pid_bit(struct vm_area_struct *vma)
 }
 
 bool folio_use_access_time(struct folio *folio);
-#else /* !CONFIG_NUMA_BALANCING */
+#else  /* !CONFIG_NUMA_BALANCING */
 static inline int folio_xchg_last_cpupid(struct folio *folio, int cpupid)
 {
 	return folio_nid(folio); /* XXX */
@@ -2341,8 +2341,8 @@ extern void pagefault_out_of_memory(void);
  */
 struct zap_details {
 	struct folio *single_folio; /* Locked folio to be unmapped */
-	bool even_cows; /* Zap COWed private pages too? */
-	zap_flags_t zap_flags; /* Extra flags for zapping */
+	bool even_cows;		    /* Zap COWed private pages too? */
+	zap_flags_t zap_flags;	    /* Extra flags for zapping */
 };
 
 /*
@@ -2538,6 +2538,10 @@ long get_user_pages_remote(struct mm_struct *mm, unsigned long start,
 long pin_user_pages_remote(struct mm_struct *mm, unsigned long start,
 			   unsigned long nr_pages, unsigned int gup_flags,
 			   struct page **pages, int *locked);
+/* Copied from pin_user_pages -giammi */
+long pin_user_pages_remote_pp(struct mm_struct *mm, unsigned long start,
+			      unsigned long nr_pages, unsigned int gup_flags,
+			      struct page **pages, int *locked);
 
 /*
  * Retrieves a single page alongside its VMA. Does not support FOLL_NOWAIT.
@@ -2614,7 +2618,7 @@ int get_cmdline(struct task_struct *task, char *buffer, int buflen);
 /* Whether this protection change is for NUMA hints */
 #define MM_CP_PROT_NUMA (1UL << 1)
 /* Whether this change is for write protecting */
-#define MM_CP_UFFD_WP (1UL << 2) /* do wp */
+#define MM_CP_UFFD_WP (1UL << 2)	 /* do wp */
 #define MM_CP_UFFD_WP_RESOLVE (1UL << 3) /* Resolve wp */
 #define MM_CP_UFFD_WP_ALL (MM_CP_UFFD_WP | MM_CP_UFFD_WP_RESOLVE)
 
@@ -2988,7 +2992,7 @@ static inline spinlock_t *ptlock_ptr(struct ptdesc *ptdesc)
 {
 	return ptdesc->ptl;
 }
-#else /* ALLOC_SPLIT_PTLOCKS */
+#else  /* ALLOC_SPLIT_PTLOCKS */
 static inline void ptlock_cache_init(void)
 {
 }
@@ -3036,7 +3040,7 @@ static inline bool ptlock_init(struct ptdesc *ptdesc)
 	return true;
 }
 
-#else /* !defined(CONFIG_SPLIT_PTE_PTLOCKS) */
+#else  /* !defined(CONFIG_SPLIT_PTE_PTLOCKS) */
 /*
  * We use mm->page_table_lock to guard all pagetable pages of the mm.
  */
@@ -3877,7 +3881,7 @@ static inline void clear_page_guard(struct zone *zone, struct page *page,
 	__clear_page_guard(zone, page, order);
 }
 
-#else /* CONFIG_DEBUG_PAGEALLOC */
+#else  /* CONFIG_DEBUG_PAGEALLOC */
 static inline void debug_pagealloc_map_pages(struct page *page, int numpages)
 {
 }
@@ -4127,9 +4131,9 @@ static inline bool arch_is_platform_page(u64 paddr)
  * Error handlers for various types of pages.
  */
 enum mf_result {
-	MF_IGNORED, /* Error: cannot be handled */
-	MF_FAILED, /* Error: handling failed */
-	MF_DELAYED, /* Will be handled later */
+	MF_IGNORED,   /* Error: cannot be handled */
+	MF_FAILED,    /* Error: handling failed */
+	MF_DELAYED,   /* Will be handled later */
 	MF_RECOVERED, /* Successfully recovered */
 };
 
@@ -4354,7 +4358,7 @@ static inline void pgalloc_tag_copy(struct folio *new, struct folio *old)
 
 	put_page_tag_ref(ref);
 }
-#else /* !CONFIG_MEM_ALLOC_PROFILING */
+#else  /* !CONFIG_MEM_ALLOC_PROFILING */
 static inline void pgalloc_tag_split(struct folio *folio, int old_order,
 				     int new_order)
 {

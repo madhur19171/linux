@@ -1,5 +1,6 @@
 #include <linux/kernel.h>
 #include <linux/syscalls.h>
+#include <linux/pagepatrol.h>
 
 #include "../include/linux/mm_inline.h"
 #include "../include/linux/memcontrol.h"
@@ -180,22 +181,38 @@ static unsigned long pagepatrol_set_list(struct mm_struct *mm, unsigned long va,
 static unsigned long pagepatrol_pin_pages(struct mm_struct *mm,
 					  unsigned long va)
 {
-	if (!mm)
-		return -EAGAIN;
-	// mmap_write_lock(current->mm);
-	mmap_write_lock(mm);
-	unsigned int flags = FOLL_LONGTERM;
-	int nr_pages = 1;
-	struct page *pages[1];
-	unsigned long ret = pin_user_pages(va, nr_pages, flags, pages);
-	if (ret != 1 || !pages[0])
-		ret = -EAGAIN;
-	else {
-		ret = (unsigned long)pages[0];
-		// printk("pin %p\n", pages[0]);
+	int retry = 5;
+	for (int i = 0; i < retry; i++) {
+		if (!mm)
+			return -EAGAIN;
+
+		int locked = 0;
+		if (locked) {
+			// mmap_write_lock(current->mm);
+			mmap_write_lock(mm);
+		}
+		unsigned int flags = FOLL_LONGTERM | FOLL_WRITE | FOLL_NOWAIT |
+				     FOLL_INTERRUPTIBLE;
+		flags = FOLL_LONGTERM | FOLL_NOFAULT;
+		int nr_pages = 1;
+		struct page *pages[1];
+		// unsigned long ret = pin_user_pages(va, nr_pages, flags, pages);
+		unsigned long ret = pin_user_pages_remote_pp(
+			mm, va, nr_pages, flags, pages, &locked);
+		if (ret != 1 || !pages[0]) {
+			ret = -EAGAIN;
+			continue;
+		} else {
+			ret = (unsigned long)pages[0];
+			// printk("pin %p\n", pages[0]);
+		}
+		if (locked) {
+			mmap_write_unlock(mm);
+		}
+		return ret;
 	}
-	mmap_write_unlock(mm);
-	return ret;
+	printk("not pinned %ld\n", va);
+	return -EAGAIN;
 }
 
 static unsigned long pagepatrol_unpin_pages(struct mm_struct *mm,
@@ -217,14 +234,14 @@ static unsigned long pagepatrol_unpin_pages(struct mm_struct *mm,
 	return 0;
 }
 
-static unsigned long pagepatrol_eviction(unsigned long pid, unsigned long type,
-					 unsigned long va, unsigned long count)
+unsigned long pagepatrol_eviction(unsigned long pid, unsigned long type,
+				  unsigned long va, unsigned long count)
 {
 	struct mm_struct *mm = get_mm(pid);
 	if (!mm)
 		return -EAGAIN;
 	if (current->mm != mm) {
-		printk("they are different %p - %p\n", current->mm, mm);
+		// printk("they are different %p - %p\n", current->mm, mm);
 	}
 	switch (type) {
 		/* Eviction */

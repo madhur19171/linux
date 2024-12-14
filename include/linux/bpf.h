@@ -731,8 +731,8 @@ enum bpf_arg_type {
 	/* the following constraints used to prototype
 	 * bpf_map_lookup/update/delete_elem() functions
 	 */
-	ARG_CONST_MAP_PTR, /* const argument used as pointer to bpf_map */
-	ARG_PTR_TO_MAP_KEY, /* pointer to stack used as map key */
+	ARG_CONST_MAP_PTR,    /* const argument used as pointer to bpf_map */
+	ARG_PTR_TO_MAP_KEY,   /* pointer to stack used as map key */
 	ARG_PTR_TO_MAP_VALUE, /* pointer to stack used as map value */
 
 	/* Used to prototype bpf_memcmp() and other functions that access data
@@ -741,23 +741,23 @@ enum bpf_arg_type {
 	ARG_PTR_TO_MEM, /* pointer to valid memory (stack, packet, map value) */
 	ARG_PTR_TO_ARENA,
 
-	ARG_CONST_SIZE, /* number of bytes accessed from memory */
+	ARG_CONST_SIZE,		/* number of bytes accessed from memory */
 	ARG_CONST_SIZE_OR_ZERO, /* number of bytes accessed from memory or 0 */
 
-	ARG_PTR_TO_CTX, /* pointer to context */
-	ARG_ANYTHING, /* any (initialized) argument is ok */
-	ARG_PTR_TO_SPIN_LOCK, /* pointer to bpf_spin_lock */
+	ARG_PTR_TO_CTX,		/* pointer to context */
+	ARG_ANYTHING,		/* any (initialized) argument is ok */
+	ARG_PTR_TO_SPIN_LOCK,	/* pointer to bpf_spin_lock */
 	ARG_PTR_TO_SOCK_COMMON, /* pointer to sock_common */
-	ARG_PTR_TO_SOCKET, /* pointer to bpf_sock (fullsock) */
-	ARG_PTR_TO_BTF_ID, /* pointer to in-kernel struct */
+	ARG_PTR_TO_SOCKET,	/* pointer to bpf_sock (fullsock) */
+	ARG_PTR_TO_BTF_ID,	/* pointer to in-kernel struct */
 	ARG_PTR_TO_RINGBUF_MEM, /* pointer to dynamically reserved ringbuf memory */
 	ARG_CONST_ALLOC_SIZE_OR_ZERO, /* number of allocated bytes requested */
 	ARG_PTR_TO_BTF_ID_SOCK_COMMON, /* pointer to in-kernel sock_common or bpf-mirrored bpf_sock */
 	ARG_PTR_TO_PERCPU_BTF_ID, /* pointer to in-kernel percpu type */
-	ARG_PTR_TO_FUNC, /* pointer to a bpf program function */
-	ARG_PTR_TO_STACK, /* pointer to stack */
+	ARG_PTR_TO_FUNC,	  /* pointer to a bpf program function */
+	ARG_PTR_TO_STACK,	  /* pointer to stack */
 	ARG_PTR_TO_CONST_STR, /* pointer to a null terminated read-only string */
-	ARG_PTR_TO_TIMER, /* pointer to bpf_timer */
+	ARG_PTR_TO_TIMER,     /* pointer to bpf_timer */
 	ARG_KPTR_XCHG_DEST, /* pointer to destination that kptrs are bpf_kptr_xchg'd into */
 	ARG_PTR_TO_DYNPTR, /* pointer to bpf_dynptr. See bpf_type_flag for dynptr type */
 	__BPF_ARG_TYPE_MAX,
@@ -785,15 +785,15 @@ static_assert(__BPF_ARG_TYPE_MAX <= BPF_BASE_TYPE_LIMIT);
 
 /* type of values returned from helper functions */
 enum bpf_return_type {
-	RET_INTEGER, /* function returns integer */
-	RET_VOID, /* function doesn't return anything */
-	RET_PTR_TO_MAP_VALUE, /* returns a pointer to map elem value */
-	RET_PTR_TO_SOCKET, /* returns a pointer to a socket */
-	RET_PTR_TO_TCP_SOCK, /* returns a pointer to a tcp_sock */
+	RET_INTEGER,		/* function returns integer */
+	RET_VOID,		/* function doesn't return anything */
+	RET_PTR_TO_MAP_VALUE,	/* returns a pointer to map elem value */
+	RET_PTR_TO_SOCKET,	/* returns a pointer to a socket */
+	RET_PTR_TO_TCP_SOCK,	/* returns a pointer to a tcp_sock */
 	RET_PTR_TO_SOCK_COMMON, /* returns a pointer to a sock_common */
-	RET_PTR_TO_MEM, /* returns a pointer to memory */
+	RET_PTR_TO_MEM,		/* returns a pointer to memory */
 	RET_PTR_TO_MEM_OR_BTF_ID, /* returns a pointer to a valid memory or a btf_id */
-	RET_PTR_TO_BTF_ID, /* returns a pointer to a btf_id */
+	RET_PTR_TO_BTF_ID,	  /* returns a pointer to a btf_id */
 	__BPF_RET_TYPE_MAX,
 
 	/* Extended ret_types. */
@@ -882,22 +882,22 @@ enum bpf_access_type { BPF_READ = 1, BPF_WRITE = 2 };
  * if (off > 0) means that 'imm' was added
  */
 enum bpf_reg_type {
-	NOT_INIT = 0, /* nothing was written into register */
-	SCALAR_VALUE, /* reg doesn't contain a valid pointer */
-	PTR_TO_CTX, /* reg points to bpf_context */
-	CONST_PTR_TO_MAP, /* reg points to struct bpf_map */
-	PTR_TO_MAP_VALUE, /* reg points to map element value */
-	PTR_TO_MAP_KEY, /* reg points to a map element key */
-	PTR_TO_STACK, /* reg == frame_pointer + offset */
+	NOT_INIT = 0,	    /* nothing was written into register */
+	SCALAR_VALUE,	    /* reg doesn't contain a valid pointer */
+	PTR_TO_CTX,	    /* reg points to bpf_context */
+	CONST_PTR_TO_MAP,   /* reg points to struct bpf_map */
+	PTR_TO_MAP_VALUE,   /* reg points to map element value */
+	PTR_TO_MAP_KEY,	    /* reg points to a map element key */
+	PTR_TO_STACK,	    /* reg == frame_pointer + offset */
 	PTR_TO_PACKET_META, /* skb->data - meta_len */
-	PTR_TO_PACKET, /* reg points to skb->data */
-	PTR_TO_PACKET_END, /* skb->data + headlen */
-	PTR_TO_FLOW_KEYS, /* reg points to bpf_flow_keys */
-	PTR_TO_SOCKET, /* reg points to struct bpf_sock */
+	PTR_TO_PACKET,	    /* reg points to skb->data */
+	PTR_TO_PACKET_END,  /* skb->data + headlen */
+	PTR_TO_FLOW_KEYS,   /* reg points to bpf_flow_keys */
+	PTR_TO_SOCKET,	    /* reg points to struct bpf_sock */
 	PTR_TO_SOCK_COMMON, /* reg points to sock_common */
-	PTR_TO_TCP_SOCK, /* reg points to struct tcp_sock */
-	PTR_TO_TP_BUFFER, /* reg points to a writable raw tp's buffer */
-	PTR_TO_XDP_SOCK, /* reg points to struct xdp_sock */
+	PTR_TO_TCP_SOCK,    /* reg points to struct tcp_sock */
+	PTR_TO_TP_BUFFER,   /* reg points to a writable raw tp's buffer */
+	PTR_TO_XDP_SOCK,    /* reg points to struct xdp_sock */
 	/* PTR_TO_BTF_ID points to a kernel struct that does not need
 	 * to be null checked by the BPF program. This does not imply the
 	 * pointer is _not_ null and in practice this can easily be a null
@@ -915,8 +915,8 @@ enum bpf_reg_type {
 	 */
 	PTR_TO_MEM, /* reg points to valid memory region */
 	PTR_TO_ARENA,
-	PTR_TO_BUF, /* reg points to a read/write buffer */
-	PTR_TO_FUNC, /* reg points to a bpf program function */
+	PTR_TO_BUF,	     /* reg points to a read/write buffer */
+	PTR_TO_FUNC,	     /* reg points to a bpf program function */
 	CONST_PTR_TO_DYNPTR, /* reg points to a const struct bpf_dynptr */
 	__BPF_REG_TYPE_MAX,
 
@@ -948,7 +948,7 @@ struct bpf_insn_access_aux {
 		};
 	};
 	struct bpf_verifier_log *log; /* for verbose logs */
-	bool is_retval; /* is accessing function return value ? */
+	bool is_retval;		      /* is accessing function return value ? */
 };
 
 static inline void bpf_ctx_record_field_size(struct bpf_insn_access_aux *aux,
@@ -1490,9 +1490,9 @@ struct bpf_prog_aux {
 	enum bpf_prog_type saved_dst_prog_type;
 	enum bpf_attach_type saved_dst_attach_type;
 	bool verifier_zext; /* Zero extensions has been inserted by verifier. */
-	bool dev_bound; /* Program is bound to the netdev. */
+	bool dev_bound;	    /* Program is bound to the netdev. */
 	bool offload_requested; /* Program is bound and offloaded to the netdev. */
-	bool attach_btf_trace; /* true if attaching to BTF-enabled raw tp */
+	bool attach_btf_trace;	  /* true if attaching to BTF-enabled raw tp */
 	bool attach_tracing_prog; /* true if tracing another tracing program */
 	bool func_proto_unreliable;
 	bool tail_call_reachable;
@@ -1566,31 +1566,31 @@ struct bpf_prog_aux {
 };
 
 struct bpf_prog {
-	u16 pages; /* Number of allocated pages */
-	u16 jited : 1, /* Is our filter JIT'ed? */
-		jit_requested : 1, /* archs need to JIT the prog */
-		gpl_compatible : 1, /* Is filter GPL compatible? */
-		cb_access : 1, /* Is control block accessed? */
-		dst_needed : 1, /* Do we need dst entry? */
+	u16 pages;			/* Number of allocated pages */
+	u16 jited : 1,			/* Is our filter JIT'ed? */
+		jit_requested : 1,	/* archs need to JIT the prog */
+		gpl_compatible : 1,	/* Is filter GPL compatible? */
+		cb_access : 1,		/* Is control block accessed? */
+		dst_needed : 1,		/* Do we need dst entry? */
 		blinding_requested : 1, /* needs constant blinding */
-		blinded : 1, /* Was blinded */
-		is_func : 1, /* program is a bpf function */
-		kprobe_override : 1, /* Do we override a kprobe? */
-		has_callchain_buf : 1, /* callchain buffer allocated? */
+		blinded : 1,		/* Was blinded */
+		is_func : 1,		/* program is a bpf function */
+		kprobe_override : 1,	/* Do we override a kprobe? */
+		has_callchain_buf : 1,	/* callchain buffer allocated? */
 		enforce_expected_attach_type : 1, /* Enforce expected_attach_type checking at attach time */
 		call_get_stack : 1, /* Do we call bpf_get_stack() or bpf_get_stackid() */
-		call_get_func_ip : 1, /* Do we call get_func_ip() */
+		call_get_func_ip : 1,	/* Do we call get_func_ip() */
 		tstamp_type_access : 1, /* Accessed __sk_buff->tstamp_type */
-		sleepable : 1; /* BPF program is sleepable */
-	enum bpf_prog_type type; /* Type of BPF program */
+		sleepable : 1;		/* BPF program is sleepable */
+	enum bpf_prog_type type;	/* Type of BPF program */
 	enum bpf_attach_type expected_attach_type; /* For some prog types */
-	u32 len; /* Number of filter blocks */
+	u32 len;				   /* Number of filter blocks */
 	u32 jited_len; /* Size of jited insns in bytes */
 	u8 tag[BPF_TAG_SIZE];
 	struct bpf_prog_stats __percpu *stats;
 	int __percpu *active;
 	unsigned int (*bpf_func)(const void *ctx, const struct bpf_insn *insn);
-	struct bpf_prog_aux *aux; /* Auxiliary fields */
+	struct bpf_prog_aux *aux;	   /* Auxiliary fields */
 	struct sock_fprog_kern *orig_prog; /* Original BPF program */
 	/* Instructions for interpreter */
 	union {
@@ -2690,7 +2690,7 @@ void bpf_dynptr_init(struct bpf_dynptr_kern *ptr, void *data,
 void bpf_dynptr_set_null(struct bpf_dynptr_kern *ptr);
 void bpf_dynptr_set_rdonly(struct bpf_dynptr_kern *ptr);
 
-#else /* !CONFIG_BPF_SYSCALL */
+#else  /* !CONFIG_BPF_SYSCALL */
 static inline struct bpf_prog *bpf_prog_get(u32 ufd)
 {
 	return ERR_PTR(-EOPNOTSUPP);
@@ -3302,6 +3302,8 @@ extern const struct bpf_func_proto bpf_cgrp_storage_delete_proto;
 extern const struct bpf_func_proto bpf_pagepatrol_eviction_proto;
 extern const struct bpf_func_proto bpf_pagepatrol_skip_page_proto;
 extern const struct bpf_func_proto bpf_pagepatrol_va_folio_proto;
+extern const struct bpf_func_proto bpf_pagepatrol_pin_proto;
+extern const struct bpf_func_proto bpf_pagepatrol_unpin_proto;
 
 const struct bpf_func_proto *
 tracing_prog_func_proto(enum bpf_func_id func_id, const struct bpf_prog *prog);

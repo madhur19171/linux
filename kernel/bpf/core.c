@@ -1583,7 +1583,7 @@ EXPORT_SYMBOL_GPL(__bpf_call_base);
 		INSN_3(ALU64, MOV, K), INSN_3(ALU64, ARSH, K),                 \
 		INSN_3(ALU64, DIV, K),                                         \
 		INSN_3(ALU64, MOD, K), /* Call instruction. */                 \
-		INSN_2(JMP, CALL), /* Exit instruction. */                     \
+		INSN_2(JMP, CALL),     /* Exit instruction. */                 \
 		INSN_2(JMP, EXIT),                                             \
 		/* 32-bit Jump instructions. */ /*   Register based. */        \
 		INSN_3(JMP32, JEQ, X), INSN_3(JMP32, JNE, X),                  \
@@ -2832,6 +2832,8 @@ const struct bpf_func_proto bpf_get_retval_proto __weak;
 const struct bpf_func_proto bpf_pagepatrol_eviction_proto __weak;
 const struct bpf_func_proto bpf_pagepatrol_skip_page_proto __weak;
 const struct bpf_func_proto bpf_pagepatrol_va_folio_proto __weak;
+const struct bpf_func_proto bpf_pagepatrol_pin_proto __weak;
+const struct bpf_func_proto bpf_pagepatrol_unpin_proto __weak;
 
 const struct bpf_func_proto *__weak bpf_get_trace_printk_proto(void)
 {
