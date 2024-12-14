@@ -375,6 +375,10 @@ __bpf_kfunc int bpf_pin_file_vaddr(int pid, unsigned long vaddr) {
 	// }
 	// spin_unlock_irq(&lruvec->lru_lock);
 
+	if (folio_test_unevictable(folio)) {
+		return 0;
+	}
+
 	folio_isolate_lru(folio);
 	folio_clear_active(folio);
 	folio_clear_referenced(folio);
@@ -460,38 +464,62 @@ __bpf_kfunc int bpf_unpin_file_vaddr(int pid, unsigned long vaddr) {
 		return -EINVAL;
 	}
 
-	lru = folio_lru_list(folio);
-	src = &lruvec->lists[lru];
+	// lru = folio_lru_list(folio);
+	// src = &lruvec->lists[lru];
 	
-	if (!folio_test_unevictable(folio)) {
+	// if (!folio_test_unevictable(folio)) {
+	// 	return 0;
+	// }
+
+	// spin_lock_irq(&lruvec->lru_lock);
+	// if (	
+	// 		folio->lru.next != NULL
+	// 		&& folio->lru.prev != NULL
+	// 		&& folio->lru.next != LIST_POISON1
+	// 		&& folio->lru.prev != LIST_POISON1
+	// 		&& folio->lru.next != LIST_POISON2
+	// 		&& folio->lru.prev != LIST_POISON2
+	// 		&& !list_empty(src)
+	// 	) {		// Make sure that we are not deleting from the tail of the list
+		
+	// 	// printk ("Unpin Node(%p)\tPrev(%p)\tNext(%p)\n", &folio->lru, folio->lru.prev, folio->lru.next);
+
+	// 	/* block memcg migration while the folio moves between lrus */
+	// 	folio_test_clear_lru(folio);
+		
+	// 	// No deletion required as unevictable folio is not on any list
+	// 	folio_clear_unevictable(folio);
+	// 	folio_set_active(folio);
+	// 	folio_set_referenced(folio);
+	// 	lruvec_add_folio (lruvec, folio);
+		
+	// 	folio_set_lru(folio);
+	// }
+	// spin_unlock_irq(&lruvec->lru_lock);
+
+	// Do not try to add on list if the folio is already unevictable
+	// or already on an LRU list
+	if (!folio_test_unevictable(folio) || folio_test_lru(folio)) {
 		return 0;
 	}
 
-	spin_lock_irq(&lruvec->lru_lock);
-	if (	
-			folio->lru.next != NULL
-			&& folio->lru.prev != NULL
-			&& folio->lru.next != LIST_POISON1
-			&& folio->lru.prev != LIST_POISON1
-			&& folio->lru.next != LIST_POISON2
-			&& folio->lru.prev != LIST_POISON2
-			&& !list_empty(src)
-		) {		// Make sure that we are not deleting from the tail of the list
-		
-		// printk ("Unpin Node(%p)\tPrev(%p)\tNext(%p)\n", &folio->lru, folio->lru.prev, folio->lru.next);
+	// Making sure that the Folio to be added again
+	// is isolated. An isolated folio doesn't belong
+	// to any list. Thus, it has prev and next as POISON
+	if (folio->lru.next == LIST_POISON1
+		&& folio->lru.prev == LIST_POISON2
+		) {
+		struct lruvec *lruvec;
 
-		/* block memcg migration while the folio moves between lrus */
-		folio_test_clear_lru(folio);
-		
-		// No deletion required as unevictable folio is not on any list
-		folio_clear_unevictable(folio);
-		folio_set_active(folio);
-		folio_set_referenced(folio);
-		lruvec_add_folio (lruvec, folio);
-		
-		folio_set_lru(folio);
+		lruvec = folio_lruvec_lock_irq(folio);
+			folio_clear_unevictable(folio);	// Make folio evictable
+			folio_set_active(folio);		// Activate the folio
+			lruvec_add_folio(lruvec, folio);
+			folio_set_lru(folio);			// Put the folio on LRU list
+		unlock_page_lruvec_irq(lruvec);
+
+		folio_put(folio);		// Decrease the ref count that was increased by isolate folio
 	}
-	spin_unlock_irq(&lruvec->lru_lock);
 
 	return 0;
 }
