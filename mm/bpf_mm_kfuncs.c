@@ -99,9 +99,18 @@ __bpf_kfunc int bpf_deactivate_file_vaddr(int pid, unsigned long vaddr) {
 		return 0;
 	}
 
-	folio_isolate_lru(folio);
+	// This big lock is held till the folio gets re-added to another list
+	// If this operation is done non-atomically (deletion then addition non-atomically),
+	// kswapd may hold the lock in between this function's deletion and addition.
+	// Then kswapd does folio isolation and releases the lock. Then this thread acquires lock
+	// to add the folio again which causes inconsistent list state.
 
 	lruvec = folio_lruvec_lock_irq(folio);
+
+	if (folio_test_clear_lru(folio)) {
+		folio_get(folio);
+		lruvec_del_folio(lruvec, folio);
+	}
 
 	folio_clear_active(folio);
 	folio_clear_referenced(folio);
@@ -204,9 +213,12 @@ __bpf_kfunc int bpf_activate_file_vaddr(int pid, unsigned long vaddr) {
 		return 0;
 	}
 
-	folio_isolate_lru(folio);
-	
 	lruvec = folio_lruvec_lock_irq(folio);
+
+	if (folio_test_clear_lru(folio)) {
+		folio_get(folio);
+		lruvec_del_folio(lruvec, folio);
+	}
 
 	folio_set_active(folio);
 	folio_set_referenced(folio);
