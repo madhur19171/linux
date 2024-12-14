@@ -93,38 +93,31 @@ __bpf_kfunc int bpf_deactivate_file_vaddr(int pid, unsigned long vaddr) {
 		printk("lruvec is NULL\n");
 		return -EINVAL;
 	}
-
-	lru = folio_lru_list(folio);
-	src = &lruvec->lists[lru];
-
+	
+	// Do not try to change lists if the folio is already unevictable
 	if (folio_test_unevictable(folio)) {
 		return 0;
 	}
 
-	spin_lock_irq(&lruvec->lru_lock);
-	if (	
-			folio->lru.next != NULL
-			&& folio->lru.prev != NULL
-			&& folio->lru.next != LIST_POISON1
-			&& folio->lru.prev != LIST_POISON1
-			&& folio->lru.next != LIST_POISON2
-			&& folio->lru.prev != LIST_POISON2
-			&& !list_empty(src)  
-		) {		// Make sure that we are not deleting from the tail of the list
-		
-		// printk ("Inactive Insert Node(%p)\tPrev(%p)\tNext(%p)\n", &folio->lru, folio->lru.prev, folio->lru.next);
+	folio_isolate_lru(folio);
 
-		/* block memcg migration while the folio moves between lrus */
-		folio_test_clear_lru(folio);
-		
-		lruvec_del_folio(lruvec, folio);
-		folio_clear_active(folio);
-		folio_clear_referenced(folio);
-		lruvec_add_folio(lruvec, folio);	// Add to head as reclaim happens from head
-		
-		folio_set_lru(folio);
+	lruvec = folio_lruvec_lock_irq(folio);
+
+	folio_clear_active(folio);
+	folio_clear_referenced(folio);
+
+	// Making sure that the Folio to be added again
+	// is isolated. An isolated folio doesn't belong
+	// to any list. Thus, it has prev and next as POISON
+	if (folio->lru.next == LIST_POISON1
+		&& folio->lru.prev == LIST_POISON2
+		) {
+		folio_clear_lru(folio);			// Remove LRU flag to prevent other threads from modifying it
+		lruvec_add_folio(lruvec, folio);
+		folio_set_lru(folio);			// Put the folio on LRU list
 	}
-	spin_unlock_irq(&lruvec->lru_lock);
+
+	unlock_page_lruvec_irq(lruvec);
 	
 	return 0;
 }
@@ -206,37 +199,30 @@ __bpf_kfunc int bpf_activate_file_vaddr(int pid, unsigned long vaddr) {
 		return -EINVAL;
 	}
 
-	lru = folio_lru_list(folio);
-	src = &lruvec->lists[lru];
-
+	// Do not try to change lists if the folio is already unevictable
 	if (folio_test_unevictable(folio)) {
 		return 0;
 	}
 
-	spin_lock_irq(&lruvec->lru_lock);
-	if (	
-			folio->lru.next != NULL
-			&& folio->lru.prev != NULL
-			&& folio->lru.next != LIST_POISON1
-			&& folio->lru.prev != LIST_POISON1
-			&& folio->lru.next != LIST_POISON2
-			&& folio->lru.prev != LIST_POISON2
-			&& !list_empty(src)  
-		) {		// Make sure that we are not deleting from the tail of the list
-		
-		// printk ("Active Insert Node(%p)\tPrev(%p)\tNext(%p)\n", &folio->lru, folio->lru.prev, folio->lru.next);
+	folio_isolate_lru(folio);
+	
+	lruvec = folio_lruvec_lock_irq(folio);
 
-		/* block memcg migration while the folio moves between lrus */
-		folio_test_clear_lru(folio);
-		
-		lruvec_del_folio(lruvec, folio);
-		folio_set_active(folio);
-		folio_set_referenced(folio);
-		lruvec_add_folio_tail(lruvec, folio);	// Add to tail to delay reclaim
-		
-		folio_set_lru(folio);
+	folio_set_active(folio);
+	folio_set_referenced(folio);
+
+	// Making sure that the Folio to be added again
+	// is isolated. An isolated folio doesn't belong
+	// to any list. Thus, it has prev and next as POISON
+	if (folio->lru.next == LIST_POISON1
+		&& folio->lru.prev == LIST_POISON2
+		) {
+		folio_clear_lru(folio);			// Remove LRU flag to prevent other threads from modifying it
+		lruvec_add_folio(lruvec, folio);
+		folio_set_lru(folio);			// Put the folio on LRU list
 	}
-	spin_unlock_irq(&lruvec->lru_lock);
+
+	unlock_page_lruvec_irq(lruvec);
 	
 	return 0;
 }
