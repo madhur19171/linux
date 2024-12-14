@@ -330,6 +330,19 @@ void lruvec_add_folio(struct lruvec *lruvec, struct folio *folio)
 }
 
 static __always_inline
+void lruvec_add_folio_unevictable(struct lruvec *lruvec, struct folio *folio)
+{
+	enum lru_list lru = folio_lru_list(folio);
+
+	if (lru_gen_add_folio(lruvec, folio, false))
+		return;
+
+	update_lru_size(lruvec, lru, folio_zonenum(folio),
+			folio_nr_pages(folio));
+	list_add(&folio->lru, &lruvec->lists[lru]);
+}
+
+static __always_inline
 void lruvec_add_folio_tail(struct lruvec *lruvec, struct folio *folio)
 {
 	enum lru_list lru = folio_lru_list(folio);
@@ -353,6 +366,19 @@ void lruvec_del_folio(struct lruvec *lruvec, struct folio *folio)
 
 	if (lru != LRU_UNEVICTABLE)
 		list_del(&folio->lru);
+	update_lru_size(lruvec, lru, folio_zonenum(folio),
+			-folio_nr_pages(folio));
+}
+
+static __always_inline
+void lruvec_del_folio_unevictable(struct lruvec *lruvec, struct folio *folio)
+{
+	enum lru_list lru = folio_lru_list(folio);
+
+	if (lru_gen_del_folio(lruvec, folio, false))
+		return;
+
+	list_del(&folio->lru);
 	update_lru_size(lruvec, lru, folio_zonenum(folio),
 			-folio_nr_pages(folio));
 }

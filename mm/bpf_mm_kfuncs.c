@@ -2,6 +2,7 @@
 #include "linux/mm_types.h"
 #include "linux/mmzone.h"
 #include "linux/page-flags.h"
+#include "linux/poison.h"
 #include <linux/bpf.h>
 #include <linux/btf.h>
 #include <linux/btf_ids.h>
@@ -11,6 +12,8 @@
 #include "internal.h"
 
 #define MAX_PINNED_PAGES	(1024 * 1024)	/* Maximum number of 4KB pages that are allowed to be pinned */
+
+int do_mlock_remote(struct mm_struct* mm, unsigned long start, size_t len, vm_flags_t flags);
 
 __bpf_kfunc_start_defs();
 
@@ -98,11 +101,18 @@ __bpf_kfunc int bpf_deactivate_file_vaddr(int pid, unsigned long vaddr) {
 		return 0;
 	}
 
-	if (!list_empty(src) && folio->lru.next != NULL) {		// Make sure that we are not deleting from the tail of the list
+	spin_lock_irq(&lruvec->lru_lock);
+	if (	
+			folio->lru.next != NULL
+			&& folio->lru.prev != NULL
+			&& folio->lru.next != LIST_POISON1
+			&& folio->lru.prev != LIST_POISON1
+			&& folio->lru.next != LIST_POISON2
+			&& folio->lru.prev != LIST_POISON2
+			&& !list_empty(src)  
+		) {		// Make sure that we are not deleting from the tail of the list
 		
 		// printk ("Inactive Insert Node(%p)\tPrev(%p)\tNext(%p)\n", &folio->lru, folio->lru.prev, folio->lru.next);
-
-		spin_lock_irq(&lruvec->lru_lock);
 
 		/* block memcg migration while the folio moves between lrus */
 		folio_test_clear_lru(folio);
@@ -113,9 +123,8 @@ __bpf_kfunc int bpf_deactivate_file_vaddr(int pid, unsigned long vaddr) {
 		lruvec_add_folio(lruvec, folio);	// Add to head as reclaim happens from head
 		
 		folio_set_lru(folio);
-
-		spin_unlock_irq(&lruvec->lru_lock);
 	}
+	spin_unlock_irq(&lruvec->lru_lock);
 	
 	return 0;
 }
@@ -204,11 +213,18 @@ __bpf_kfunc int bpf_activate_file_vaddr(int pid, unsigned long vaddr) {
 		return 0;
 	}
 
-	if (!list_empty(src) && folio->lru.next != NULL) {		// Make sure that we are not deleting from the tail of the list
+	spin_lock_irq(&lruvec->lru_lock);
+	if (	
+			folio->lru.next != NULL
+			&& folio->lru.prev != NULL
+			&& folio->lru.next != LIST_POISON1
+			&& folio->lru.prev != LIST_POISON1
+			&& folio->lru.next != LIST_POISON2
+			&& folio->lru.prev != LIST_POISON2
+			&& !list_empty(src)  
+		) {		// Make sure that we are not deleting from the tail of the list
 		
 		// printk ("Active Insert Node(%p)\tPrev(%p)\tNext(%p)\n", &folio->lru, folio->lru.prev, folio->lru.next);
-
-		spin_lock_irq(&lruvec->lru_lock);
 
 		/* block memcg migration while the folio moves between lrus */
 		folio_test_clear_lru(folio);
@@ -219,9 +235,8 @@ __bpf_kfunc int bpf_activate_file_vaddr(int pid, unsigned long vaddr) {
 		lruvec_add_folio_tail(lruvec, folio);	// Add to tail to delay reclaim
 		
 		folio_set_lru(folio);
-
-		spin_unlock_irq(&lruvec->lru_lock);
 	}
+	spin_unlock_irq(&lruvec->lru_lock);
 	
 	return 0;
 }
@@ -229,6 +244,8 @@ __bpf_kfunc int bpf_activate_file_vaddr(int pid, unsigned long vaddr) {
 __bpf_kfunc int bpf_pin_file_vaddr(int pid, unsigned long vaddr) {
 	struct mm_struct *mm;
 	struct page *page;
+	// struct page page;
+	// struct page *pagep = &page;
 	struct pid *spid;
 	struct task_struct *task;
 	pte_t *pte;
@@ -239,6 +256,11 @@ __bpf_kfunc int bpf_pin_file_vaddr(int pid, unsigned long vaddr) {
 	struct lruvec *lruvec;
 	enum lru_list lru;
 	struct list_head *src;
+
+	// int ret;
+	// int locked = 1;
+
+	struct vm_area_struct *vma;
 
 	// Validate inputs
 	if (!vaddr) {
@@ -306,7 +328,7 @@ __bpf_kfunc int bpf_pin_file_vaddr(int pid, unsigned long vaddr) {
 	// mmap_read_lock(mm);
 	// ret = pin_user_pages_remote(mm, vaddr,
 	// 		     1,
-	// 		     FOLL_LONGTERM | FOLL_WRITE,
+	// 		     FOLL_LONGTERM | FOLL_NOFAULT,
 	// 		     &pagep, &locked);
 	
 	// if (ret <= 0) {
@@ -318,35 +340,45 @@ __bpf_kfunc int bpf_pin_file_vaddr(int pid, unsigned long vaddr) {
 	// }
 	// mmap_read_unlock(mm);
 
-	lru = folio_lru_list(folio);
-	src = &lruvec->lists[lru];
+	// spin_lock_irq(&lruvec->lru_lock);
+	// lru = folio_lru_list(folio);
+	// src = &lruvec->lists[lru];
 	
-	if (folio_test_unevictable(folio)) {
-		return 0;
-	}
+	// if (folio_test_unevictable(folio)) {
+	// 	return 0;
+	// }
 
-	if (!list_empty(src) && folio->lru.next != NULL) {		// Make sure that we are not deleting from the tail of the list
+	// // if (	
+	// // 		folio->lru.next != NULL
+	// // 		&& folio->lru.prev != NULL
+	// // 		&& folio->lru.next != LIST_POISON1
+	// // 		&& folio->lru.prev != LIST_POISON1
+	// // 		&& folio->lru.next != LIST_POISON2
+	// // 		&& folio->lru.prev != LIST_POISON2
+	// // 		&& !list_empty(src) 
+	// // 	) 
+	// 	{		// Make sure that we are not deleting from the tail of the list or deleting an entry that is not on any list
 		
-		// printk ("Pin Node(%p)\tPrev(%p)\tNext(%p)\n", &folio->lru, folio->lru.prev, folio->lru.next);
+	// 	// printk ("Pin Node(%p)\tPrev(%p)\tNext(%p)\n", &folio->lru, folio->lru.prev, folio->lru.next);
 
-		spin_lock_irq(&lruvec->lru_lock);
-
-		/* block memcg migration while the folio moves between lrus */
-		folio_test_clear_lru(folio);
+	// 	/* block memcg migration while the folio moves between lrus */
+	// 	folio_test_clear_lru(folio);
 		
-		lruvec_del_folio_unevictable(lruvec, folio);
-		folio_clear_active(folio);
-		folio_clear_referenced(folio);
-		folio_set_unevictable(folio);	// As long as I set folio unevictable, it won't be
-										// evicted as it is not on active or inactive list
-										// It doesn't really matter if the folio is on the 
-										// Unevictable list
-		// lruvec_add_folio_tail (lruvec, folio);
-		
-		folio_set_lru(folio);
+	// 	lruvec_del_folio_unevictable(lruvec, folio);
+	// 	folio_clear_active(folio);
+	// 	folio_clear_referenced(folio);
+	// 	folio_set_unevictable(folio);	// As long as I set folio unevictable, it won't be
+	// 									// evicted as it is not on active or inactive list
+	// 									// It doesn't really matter if the folio is on the 
+	// 									// Unevictable list
+	// 	lruvec_add_folio_tail (lruvec, folio);
+	// }
+	// spin_unlock_irq(&lruvec->lru_lock);
 
-		spin_unlock_irq(&lruvec->lru_lock);
-	}
+	folio_isolate_lru(folio);
+	folio_clear_active(folio);
+	folio_clear_referenced(folio);
+	folio_set_unevictable(folio);
 
 	return 0;
 }
@@ -435,11 +467,18 @@ __bpf_kfunc int bpf_unpin_file_vaddr(int pid, unsigned long vaddr) {
 		return 0;
 	}
 
-	if (!list_empty(src) && folio->lru.next != NULL) {		// Make sure that we are not deleting from the tail of the list
+	spin_lock_irq(&lruvec->lru_lock);
+	if (	
+			folio->lru.next != NULL
+			&& folio->lru.prev != NULL
+			&& folio->lru.next != LIST_POISON1
+			&& folio->lru.prev != LIST_POISON1
+			&& folio->lru.next != LIST_POISON2
+			&& folio->lru.prev != LIST_POISON2
+			&& !list_empty(src)
+		) {		// Make sure that we are not deleting from the tail of the list
 		
 		// printk ("Unpin Node(%p)\tPrev(%p)\tNext(%p)\n", &folio->lru, folio->lru.prev, folio->lru.next);
-
-		spin_lock_irq(&lruvec->lru_lock);
 
 		/* block memcg migration while the folio moves between lrus */
 		folio_test_clear_lru(folio);
@@ -451,9 +490,8 @@ __bpf_kfunc int bpf_unpin_file_vaddr(int pid, unsigned long vaddr) {
 		lruvec_add_folio (lruvec, folio);
 		
 		folio_set_lru(folio);
-
-		spin_unlock_irq(&lruvec->lru_lock);
 	}
+	spin_unlock_irq(&lruvec->lru_lock);
 
 	return 0;
 }
