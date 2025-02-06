@@ -5,6 +5,8 @@
  * Author: Anil S Keshavamurthy <anil.s.keshavamurthy@intel.com>
  */
 
+#include "asm/page_types.h"
+#include "linux/plainlist.h"
 #include <linux/iova.h>
 #include <linux/kmemleak.h>
 #include <linux/module.h>
@@ -56,6 +58,10 @@ init_iova_domain(struct iova_domain *iovad, unsigned long granule,
 	iovad->anchor.pfn_lo = iovad->anchor.pfn_hi = IOVA_ANCHOR;
 	rb_link_node(&iovad->anchor.node, NULL, &iovad->rbroot.rb_node);
 	rb_insert_color(&iovad->anchor.node, &iovad->rbroot);
+
+	// Initializing plain list
+	spin_lock_init(&iovad->iova_pl_lock);
+	iovad->iova_plain_list = init_pl(start_pfn);
 }
 EXPORT_SYMBOL_GPL(init_iova_domain);
 
@@ -222,6 +228,40 @@ iova32_full:
 	return -ENOMEM;
 }
 
+static int __alloc_iova_range_from_plain_list(struct iova_domain *iovad,
+		unsigned long size, unsigned long limit_pfn,
+			struct iova *new, bool size_aligned)
+{
+	struct plain_list *plain_list;
+	struct pl_node *pl_node;
+	unsigned long flags;
+	unsigned long align_mask = ~0UL;
+	unsigned long num_of_pfns = 0;	// Number of PFNs to allocate
+
+	if (size_aligned)
+		align_mask <<= fls_long(size - 1);
+
+	num_of_pfns = size / (1 << PAGE_OFFSET_BITS);	
+
+	/* Walk the plain list */
+	spin_lock_irqsave(&iovad->iova_pl_lock, flags);
+	plain_list = iovad->iova_plain_list;
+	pl_node = allocate_pl_node(plain_list, num_of_pfns);
+
+	if(pl_node == NULL) { 
+		spin_unlock_irqrestore(&iovad->iova_pl_lock, flags);
+		return -ENOMEM;
+	}
+
+	/* pfn_lo will point to size aligned address if size_aligned is set */
+	new->pfn_lo = plain_list->base + pl_node->frame_number;
+	new->pfn_hi = new->pfn_lo + size - 1;
+	pl_node->opaque = new;	// Storing pointer to iova struct in the plain list to be freed later
+
+	spin_unlock_irqrestore(&iovad->iova_pl_lock, flags);
+	return 0;
+}
+
 static struct kmem_cache *iova_cache;
 static unsigned int iova_cache_users;
 static DEFINE_MUTEX(iova_cache_mutex);
@@ -260,7 +300,9 @@ alloc_iova(struct iova_domain *iovad, unsigned long size,
 	if (!new_iova)
 		return NULL;
 
-	ret = __alloc_and_insert_iova_range(iovad, size, limit_pfn + 1,
+	// ret = __alloc_and_insert_iova_range(iovad, size, limit_pfn + 1,
+	// 		new_iova, size_aligned);
+	ret = __alloc_iova_range_from_plain_list(iovad, size, limit_pfn + 1,
 			new_iova, size_aligned);
 
 	if (ret) {
@@ -345,20 +387,32 @@ EXPORT_SYMBOL_GPL(__free_iova);
  * This functions finds an iova for a given pfn and then
  * frees the iova from that domain.
  */
+// void
+// free_iova(struct iova_domain *iovad, unsigned long pfn)
+// {
+// 	unsigned long flags;
+// 	struct iova *iova;
+
+// 	spin_lock_irqsave(&iovad->iova_rbtree_lock, flags);
+// 	iova = private_find_iova(iovad, pfn);
+// 	if (!iova) {
+// 		spin_unlock_irqrestore(&iovad->iova_rbtree_lock, flags);
+// 		return;
+// 	}
+// 	remove_iova(iovad, iova);
+// 	spin_unlock_irqrestore(&iovad->iova_rbtree_lock, flags);
+// 	free_iova_mem(iova);
+// }
+
 void
 free_iova(struct iova_domain *iovad, unsigned long pfn)
 {
+	struct iova * iova;
 	unsigned long flags;
-	struct iova *iova;
 
 	spin_lock_irqsave(&iovad->iova_rbtree_lock, flags);
-	iova = private_find_iova(iovad, pfn);
-	if (!iova) {
-		spin_unlock_irqrestore(&iovad->iova_rbtree_lock, flags);
-		return;
-	}
-	remove_iova(iovad, iova);
-	spin_unlock_irqrestore(&iovad->iova_rbtree_lock, flags);
+	iova = free_pl_node(iovad->iova_plain_list, pfn - iovad->iova_plain_list->base);
+
 	free_iova_mem(iova);
 }
 EXPORT_SYMBOL_GPL(free_iova);

@@ -13,10 +13,12 @@
 #include <linux/kernel.h>
 #include <linux/rbtree.h>
 #include <linux/dma-mapping.h>
+#include <linux/plainlist.h>
 
 /* iova structure */
 struct iova {
 	struct rb_node	node;
+	struct pl_node  pl_node;	/* Node location in the plain list */
 	unsigned long	pfn_hi; /* Highest allocated pfn */
 	unsigned long	pfn_lo; /* Lowest allocated pfn */
 };
@@ -30,6 +32,10 @@ struct iova_domain {
 	struct rb_root	rbroot;		/* iova domain rbtree root */
 	struct rb_node	*cached_node;	/* Save last alloced node */
 	struct rb_node	*cached32_node; /* Save last 32-bit alloced node */
+
+	spinlock_t	iova_pl_lock; /* Lock to protect update of plain list */
+	struct plain_list *iova_plain_list;
+
 	unsigned long	granule;	/* pfn granularity for this domain */
 	unsigned long	start_pfn;	/* Lower limit for this domain */
 	unsigned long	dma_32bit_pfn;
