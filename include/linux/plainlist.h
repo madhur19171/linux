@@ -2,6 +2,7 @@
 #define	_LINUX_PLAINLIST_H
 
 #include "linux/gfp_types.h"
+#include "linux/printk.h"
 #include "linux/slab.h"
 #include <linux/container_of.h>
 
@@ -45,6 +46,8 @@ struct plain_list * init_pl (unsigned long base) {
 		plain_list->pl_root_node[i].frame_number			= i;	// Initialize the frame numbers
 	}
 
+	pr_crit("Plain List initialized with base (0x%lx)", base);
+
 	return plain_list;
 }
 
@@ -74,6 +77,12 @@ struct pl_node * allocate_pl_node (struct plain_list * plain_list, unsigned long
 		plain_list->pl_root_node[i + num - 1].pl_flags.range_end = 1;
 		pl_node = &plain_list->pl_root_node[i];
 		pl_node->pl_flags.range_start = 1;	// First node starts the range
+	}
+
+	if (pl_node == NULL) {
+		pr_crit("Failed to allocate %lx contiguous plain list nodes", num);
+	} else {
+		pr_crit("Allocated %lx plain list nodes with start 0x%lx", num, pl_node->frame_number);
 	}
 
 	// If NULL is returned, there were no free nodes to be allocated

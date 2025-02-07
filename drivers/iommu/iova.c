@@ -7,6 +7,7 @@
 
 #include "asm/page_types.h"
 #include "linux/plainlist.h"
+#include "linux/printk.h"
 #include <linux/iova.h>
 #include <linux/kmemleak.h>
 #include <linux/module.h>
@@ -305,6 +306,8 @@ alloc_iova(struct iova_domain *iovad, unsigned long size,
 	ret = __alloc_iova_range_from_plain_list(iovad, size, limit_pfn + 1,
 			new_iova, size_aligned);
 
+	pr_crit("Allocated IOVA hi(0x%lx) lo(0x%lx)", new_iova->pfn_hi, new_iova->pfn_lo);
+
 	if (ret) {
 		free_iova_mem(new_iova);
 		return NULL;
@@ -412,6 +415,8 @@ free_iova(struct iova_domain *iovad, unsigned long pfn)
 
 	spin_lock_irqsave(&iovad->iova_rbtree_lock, flags);
 	iova = free_pl_node(iovad->iova_plain_list, pfn - iovad->iova_plain_list->base);
+
+	pr_crit("Freed IOVA pfn(0x%lx)", pfn);
 
 	free_iova_mem(iova);
 }
