@@ -62,7 +62,8 @@ init_iova_domain(struct iova_domain *iovad, unsigned long granule,
 
 	// Initializing plain list
 	spin_lock_init(&iovad->iova_pl_lock);
-	iovad->iova_plain_list = init_pl(start_pfn);
+	// 0xf0000 is used as the base, otherwise the start_pfn is 0 which raises errors in kernel
+	iovad->iova_plain_list = init_pl(0xf0000);
 }
 EXPORT_SYMBOL_GPL(init_iova_domain);
 
@@ -242,7 +243,7 @@ static int __alloc_iova_range_from_plain_list(struct iova_domain *iovad,
 	if (size_aligned)
 		align_mask <<= fls_long(size - 1);
 
-	num_of_pfns = size / (1 << PAGE_OFFSET_BITS);	
+	num_of_pfns = size;	
 
 	/* Walk the plain list */
 	spin_lock_irqsave(&iovad->iova_pl_lock, flags);
@@ -306,7 +307,7 @@ alloc_iova(struct iova_domain *iovad, unsigned long size,
 	ret = __alloc_iova_range_from_plain_list(iovad, size, limit_pfn + 1,
 			new_iova, size_aligned);
 
-	pr_crit("Allocated IOVA hi(0x%lx) lo(0x%lx)", new_iova->pfn_hi, new_iova->pfn_lo);
+	// pr_crit("Allocated IOVA hi(0x%lx) lo(0x%lx)", new_iova->pfn_hi, new_iova->pfn_lo);
 
 	if (ret) {
 		free_iova_mem(new_iova);
@@ -416,7 +417,7 @@ free_iova(struct iova_domain *iovad, unsigned long pfn)
 	spin_lock_irqsave(&iovad->iova_rbtree_lock, flags);
 	iova = free_pl_node(iovad->iova_plain_list, pfn - iovad->iova_plain_list->base);
 
-	pr_crit("Freed IOVA pfn(0x%lx)", pfn);
+	// pr_crit("Freed IOVA pfn(0x%lx)", pfn);
 
 	free_iova_mem(iova);
 }

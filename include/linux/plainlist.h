@@ -55,10 +55,13 @@ static __always_inline
 struct pl_node * allocate_pl_node (struct plain_list * plain_list, unsigned long num) {
 	struct pl_node * pl_node = NULL;
 	int i = 0;
-	bool contig = true;
+	bool contig = false;
 
 	for (; i < MAX_PLAIN_LIST_SIZE - num; i++) {
+		contig = false;
+
 		if (plain_list->pl_root_node[i].pl_flags.valid == 0) {	// Unallocated node
+			contig = true;
 			for (int j = 0; j < num; j++) {
 				contig &= plain_list->pl_root_node[i + j].pl_flags.valid == 0;
 			}
@@ -80,9 +83,9 @@ struct pl_node * allocate_pl_node (struct plain_list * plain_list, unsigned long
 	}
 
 	if (pl_node == NULL) {
-		pr_crit("Failed to allocate %lx contiguous plain list nodes", num);
+		pr_crit("Failed to allocate %lu contiguous plain list nodes", num);
 	} else {
-		pr_crit("Allocated %lx plain list nodes with start 0x%lx", num, pl_node->frame_number);
+		// pr_crit("Allocated %lu plain list nodes with start 0x%lx", num, pl_node->frame_number);
 	}
 
 	// If NULL is returned, there were no free nodes to be allocated
@@ -112,6 +115,8 @@ void * free_pl_node (struct plain_list * plain_list, unsigned long frame_number)
 	plain_list->pl_root_node[start_node_number].pl_flags.range_start = 0;
 	plain_list->pl_root_node[end_node_number].pl_flags.valid = 0;
 	plain_list->pl_root_node[end_node_number].pl_flags.range_end = 0;
+
+	// pr_crit("Freed %lu plain list nodes with start 0x%lx", end_node_number - start_node_number + 1, start_node_number);
 
 	return plain_list->pl_root_node[start_node_number].opaque;
 }
