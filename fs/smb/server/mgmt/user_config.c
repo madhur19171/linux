@@ -36,16 +36,16 @@ struct ksmbd_user *ksmbd_alloc_user(struct ksmbd_login_response *resp,
 {
 	struct ksmbd_user *user;
 
-	user = kmalloc(sizeof(struct ksmbd_user), GFP_KERNEL);
+	user = kmalloc_obj(struct ksmbd_user, KSMBD_DEFAULT_GFP);
 	if (!user)
 		return NULL;
 
-	user->name = kstrdup(resp->account, GFP_KERNEL);
+	user->name = kstrdup(resp->account, KSMBD_DEFAULT_GFP);
 	user->flags = resp->status;
 	user->gid = resp->gid;
 	user->uid = resp->uid;
 	user->passkey_sz = resp->hash_sz;
-	user->passkey = kmalloc(resp->hash_sz, GFP_KERNEL);
+	user->passkey = kmalloc(resp->hash_sz, KSMBD_DEFAULT_GFP);
 	if (user->passkey)
 		memcpy(user->passkey, resp->hash, resp->hash_sz);
 
@@ -56,15 +56,9 @@ struct ksmbd_user *ksmbd_alloc_user(struct ksmbd_login_response *resp,
 		goto err_free;
 
 	if (resp_ext) {
-		if (resp_ext->ngroups > NGROUPS_MAX) {
-			pr_err("ngroups(%u) from login response exceeds max groups(%d)\n",
-					resp_ext->ngroups, NGROUPS_MAX);
-			goto err_free;
-		}
-
 		user->sgid = kmemdup(resp_ext->____payload,
 				     resp_ext->ngroups * sizeof(gid_t),
-				     GFP_KERNEL);
+				     KSMBD_DEFAULT_GFP);
 		if (!user->sgid)
 			goto err_free;
 
@@ -90,11 +84,9 @@ void ksmbd_free_user(struct ksmbd_user *user)
 	kfree(user);
 }
 
-int ksmbd_anonymous_user(struct ksmbd_user *user)
+bool ksmbd_anonymous_user(struct ksmbd_user *user)
 {
-	if (user->name[0] == '\0')
-		return 1;
-	return 0;
+	return user->name[0] == '\0';
 }
 
 bool ksmbd_compare_user(struct ksmbd_user *u1, struct ksmbd_user *u2)

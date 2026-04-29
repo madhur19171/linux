@@ -866,7 +866,7 @@ static int fs_enet_probe(struct platform_device *ofdev)
 	if (!ops)
 		return -EINVAL;
 
-	fpi = kzalloc(sizeof(*fpi), GFP_KERNEL);
+	fpi = kzalloc_obj(*fpi);
 	if (!fpi)
 		return -ENOMEM;
 
@@ -951,7 +951,9 @@ static int fs_enet_probe(struct platform_device *ofdev)
 	spin_lock_init(&fep->lock);
 	spin_lock_init(&fep->tx_lock);
 
-	of_get_ethdev_address(ofdev->dev.of_node, ndev);
+	ret = of_get_ethdev_address(ofdev->dev.of_node, ndev);
+	if (ret == -EPROBE_DEFER)
+		goto out_cleanup_data;
 
 	ret = fep->ops->allocate_bd(ndev);
 	if (ret)
@@ -1052,7 +1054,7 @@ static struct platform_driver fs_enet_driver = {
 		.of_match_table = fs_enet_match,
 	},
 	.probe = fs_enet_probe,
-	.remove_new = fs_enet_remove,
+	.remove = fs_enet_remove,
 };
 
 #ifdef CONFIG_NET_POLL_CONTROLLER

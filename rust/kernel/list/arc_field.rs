@@ -56,7 +56,7 @@ impl<T, const ID: u64> ListArcField<T, ID> {
     ///
     /// The caller must have mutable access to the `ListArc<ID>` containing the struct with this
     /// field for the duration of the returned reference.
-    #[allow(clippy::mut_from_ref)]
+    #[expect(clippy::mut_from_ref)]
     pub unsafe fn assert_mut(&self) -> &mut T {
         // SAFETY: The caller has exclusive access to the `ListArc`, so they also have exclusive
         // access to this field.
@@ -66,6 +66,7 @@ impl<T, const ID: u64> ListArcField<T, ID> {
 
 /// Defines getters for a [`ListArcField`].
 #[macro_export]
+#[doc(hidden)]
 macro_rules! define_list_arc_field_getter {
     ($pub:vis fn $name:ident(&self $(<$id:tt>)?) -> &$typ:ty { $field:ident }
      $($rest:tt)*

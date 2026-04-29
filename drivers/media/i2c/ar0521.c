@@ -255,10 +255,10 @@ static u32 calc_pll(struct ar0521_dev *sensor, u32 freq, u16 *pre_ptr, u16 *mult
 			continue; /* Minimum value */
 		if (new_mult > 254)
 			break; /* Maximum, larger pre won't work either */
-		if (sensor->extclk_freq * (u64)new_mult < AR0521_PLL_MIN *
+		if (sensor->extclk_freq * (u64)new_mult < (u64)AR0521_PLL_MIN *
 		    new_pre)
 			continue;
-		if (sensor->extclk_freq * (u64)new_mult > AR0521_PLL_MAX *
+		if (sensor->extclk_freq * (u64)new_mult > (u64)AR0521_PLL_MAX *
 		    new_pre)
 			break; /* Larger pre won't work either */
 		new_pll = div64_round_up(sensor->extclk_freq * (u64)new_mult,
@@ -1077,11 +1077,10 @@ static int ar0521_probe(struct i2c_client *client)
 	}
 
 	/* Get master clock (extclk) */
-	sensor->extclk = devm_clk_get(dev, "extclk");
-	if (IS_ERR(sensor->extclk)) {
-		dev_err(dev, "failed to get extclk\n");
-		return PTR_ERR(sensor->extclk);
-	}
+	sensor->extclk = devm_v4l2_sensor_clk_get(dev, "extclk");
+	if (IS_ERR(sensor->extclk))
+		return dev_err_probe(dev, PTR_ERR(sensor->extclk),
+				     "failed to get extclk\n");
 
 	sensor->extclk_freq = clk_get_rate(sensor->extclk);
 
@@ -1095,6 +1094,9 @@ static int ar0521_probe(struct i2c_client *client)
 	/* Request optional reset pin (usually active low) and assert it */
 	sensor->reset_gpio = devm_gpiod_get_optional(dev, "reset",
 						     GPIOD_OUT_HIGH);
+	if (IS_ERR(sensor->reset_gpio))
+		return dev_err_probe(dev, PTR_ERR(sensor->reset_gpio),
+				     "failed to get reset gpio\n");
 
 	v4l2_i2c_subdev_init(&sensor->sd, client, &ar0521_subdev_ops);
 
@@ -1110,8 +1112,8 @@ static int ar0521_probe(struct i2c_client *client)
 						ar0521_supply_names[cnt]);
 
 		if (IS_ERR(supply)) {
-			dev_info(dev, "no %s regulator found: %li\n",
-				 ar0521_supply_names[cnt], PTR_ERR(supply));
+			dev_info(dev, "no %s regulator found: %pe\n",
+				 ar0521_supply_names[cnt], supply);
 			return PTR_ERR(supply);
 		}
 		sensor->supplies[cnt] = supply;
